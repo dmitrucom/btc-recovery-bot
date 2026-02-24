@@ -1300,8 +1300,50 @@ byId('wordInput').addEventListener('keydown', e => {
   if (e.key === 'Enter' && !isChecking) startCheck();
 });
 
+// ═══════════════════════════════════════════════════
+//  URL PARAM DEEP LINKING — auto-fill & auto-start
+// ═══════════════════════════════════════════════════
+function initFromUrlParams() {
+  const params = new URLSearchParams(location.search);
+  const word   = params.get('word');
+  const words  = params.get('words');
+  const modeP  = params.get('mode');
+  const depthP = params.get('depth');
+  const tab    = params.get('tab');
+
+  // Apply mode / depth overrides first
+  if (modeP === 'bip39' || modeP === 'brainwallet') {
+    setMode(modeP);
+    setBatchMode(modeP);
+  }
+  if (depthP === 'deep' || depthP === 'normal') {
+    setDepth(depthP);
+    setBatchDepth(depthP);
+  }
+
+  if (words) {
+    // Batch tab: pre-fill textarea and auto-start
+    switchTab('batch');
+    byId('batchInput').value = words.replace(/,/g, '\n');
+    byId('batchFeedCard').classList.remove('hidden');
+    setTimeout(() => startBatch(), 700);
+
+  } else if (word) {
+    // Single word tab: pre-fill and auto-start
+    switchTab('single');
+    byId('wordInput').value = word;
+    setTimeout(() => startCheck(), 500);
+
+  } else if (tab === 'batch') {
+    switchTab('batch');
+  } else if (tab === 'hunt') {
+    switchTab('hunt');
+  }
+}
+
 // ─── INIT ───
 updateStats();
+initFromUrlParams();
 </script>
 </body>
 </html>
