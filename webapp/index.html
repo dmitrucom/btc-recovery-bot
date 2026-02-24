@@ -1,0 +1,1025 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>BTC Seed Recovery Checker</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #080812;
+      --surface: #0f0f1c;
+      --surface2: #161626;
+      --surface3: #1e1e32;
+      --border: #2a2a45;
+      --text: #e2e8f0;
+      --text2: #8892a4;
+      --text3: #3a4158;
+      --accent: #f7931a;
+      --accent-dim: rgba(247, 147, 26, 0.12);
+      --accent-glow: 0 0 20px rgba(247, 147, 26, 0.3);
+      --success: #10b981;
+      --success-dim: rgba(16, 185, 129, 0.12);
+      --danger: #ef4444;
+      --warning: #f59e0b;
+      --r: 12px;
+      --rs: 8px;
+    }
+
+    html { scroll-behavior: smooth; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+      line-height: 1.6;
+    }
+
+    /* ─── HEADER ─── */
+    .header {
+      background: linear-gradient(180deg, #0d0d22 0%, var(--bg) 100%);
+      border-bottom: 1px solid var(--border);
+      padding: 18px 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .header-brand { display: flex; align-items: center; gap: 12px; }
+    .header-logo {
+      font-size: 30px;
+      filter: drop-shadow(0 0 10px rgba(247, 147, 26, 0.7));
+    }
+    .header-title { font-size: 19px; font-weight: 700; }
+    .header-sub { font-size: 12px; color: var(--text2); }
+    .header-right { display: flex; align-items: center; gap: 10px; }
+    .badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 4px 12px;
+      border-radius: 100px;
+      font-size: 12px; font-weight: 600;
+    }
+    .badge-idle { background: var(--surface2); color: var(--text2); border: 1px solid var(--border); }
+    .badge-run  { background: var(--accent-dim); color: var(--accent); border: 1px solid rgba(247,147,26,.4); }
+    .pulse { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: blink 1s ease-in-out infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+
+    /* ─── STATS BAR ─── */
+    .stats-bar {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 1px;
+      background: var(--border);
+      border-bottom: 1px solid var(--border);
+    }
+    .stat { background: var(--surface); padding: 14px 16px; text-align: center; }
+    .stat-val { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--accent); }
+    .stat-lbl { font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: .5px; }
+
+    /* ─── LAYOUT ─── */
+    .container {
+      max-width: 860px;
+      margin: 0 auto;
+      padding: 24px 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--r);
+      padding: 22px;
+    }
+    .card-title {
+      font-size: 15px; font-weight: 600;
+      margin-bottom: 16px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .hidden { display: none !important; }
+
+    /* ─── INPUTS ─── */
+    .input-row { display: flex; gap: 10px; margin-bottom: 14px; }
+    .input-field {
+      flex: 1;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--rs);
+      padding: 11px 14px;
+      color: var(--text);
+      font-size: 15px;
+      outline: none;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    .input-field:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-dim);
+    }
+    .input-field::placeholder { color: var(--text3); }
+
+    .options-row { display: flex; gap: 20px; margin-bottom: 14px; flex-wrap: wrap; }
+    .opt-group { display: flex; flex-direction: column; gap: 5px; }
+    .opt-lbl { font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: .5px; }
+    .toggle-row {
+      display: flex;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--rs);
+      overflow: hidden;
+    }
+    .tbtn {
+      padding: 7px 15px;
+      font-size: 13px;
+      border: none; background: transparent;
+      color: var(--text2);
+      cursor: pointer;
+      transition: all .2s;
+      white-space: nowrap;
+    }
+    .tbtn.active { background: var(--accent); color: #000; font-weight: 600; }
+
+    /* ─── BUTTONS ─── */
+    .btn {
+      padding: 10px 20px;
+      border-radius: var(--rs);
+      border: none; cursor: pointer;
+      font-size: 14px; font-weight: 600;
+      transition: all .2s;
+      display: inline-flex; align-items: center; gap: 7px;
+    }
+    .btn-primary { background: var(--accent); color: #000; }
+    .btn-primary:hover { background: #e08618; box-shadow: var(--accent-glow); transform: translateY(-1px); }
+    .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
+    .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
+    .btn-danger { background: var(--danger); color: #fff; }
+    .btn-danger:hover { background: #dc2626; }
+    .btn:disabled { opacity: .4; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+    .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
+
+    /* ─── PROGRESS ─── */
+    .prog-wrap { height: 3px; background: var(--border); border-radius: 3px; margin: 12px 0; overflow: hidden; }
+    .prog-bar { height: 100%; background: var(--accent); border-radius: 3px; transition: width .3s; width: 0; }
+    .prog-bar.ind { animation: ind 1.5s ease-in-out infinite; width: 30%; }
+    @keyframes ind { 0%{transform:translateX(-200%)} 100%{transform:translateX(500%)} }
+
+    /* ─── FEED ─── */
+    .feed {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--rs);
+      height: 280px;
+      overflow-y: auto;
+      padding: 10px;
+      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
+      font-size: 12.5px;
+      scroll-behavior: smooth;
+    }
+    .feed-entry {
+      padding: 3px 7px;
+      border-radius: 4px;
+      margin-bottom: 2px;
+      display: flex; align-items: baseline; gap: 7px;
+    }
+    .fe-ts { color: var(--text3); font-size: 10.5px; min-width: 48px; flex-shrink: 0; }
+    .fe-info    { color: var(--text2); }
+    .fe-checking{ color: var(--text); }
+    .fe-empty   { color: var(--text3); }
+    .fe-used    { color: var(--warning); }
+    .fe-found   { background: var(--success-dim); color: var(--success); font-weight: 600; border: 1px solid rgba(16,185,129,.25); }
+    .fe-error   { color: var(--danger); }
+    .fe-jackpot {
+      background: linear-gradient(90deg, rgba(247,147,26,.18), rgba(255,100,0,.18));
+      color: var(--accent); font-weight: 700;
+      border: 1px solid rgba(247,147,26,.4);
+      animation: jackpot 1s ease-in-out infinite;
+    }
+    @keyframes jackpot { 0%,100%{opacity:1} 50%{opacity:.65} }
+
+    /* ─── RESULTS ─── */
+    .result-item {
+      background: var(--surface2);
+      border: 1px solid var(--success);
+      border-radius: var(--rs);
+      padding: 16px;
+      margin-bottom: 12px;
+      position: relative;
+    }
+    .result-bal { font-size: 22px; font-weight: 700; color: var(--success); margin-bottom: 10px; }
+    .result-field {
+      display: flex; align-items: center; gap: 8px;
+      margin-bottom: 5px; font-size: 13px;
+    }
+    .rf-lbl { color: var(--text2); min-width: 68px; flex-shrink: 0; }
+    .rf-val { color: var(--text); font-family: monospace; font-size: 12px; word-break: break-all; flex: 1; }
+    .copy-btn {
+      padding: 3px 8px; font-size: 11px;
+      background: var(--surface3); border: 1px solid var(--border);
+      border-radius: 4px; color: var(--text2);
+      cursor: pointer; transition: all .2s; white-space: nowrap; flex-shrink: 0;
+    }
+    .copy-btn:hover { border-color: var(--accent); color: var(--accent); }
+    .expl-link { font-size: 11px; color: var(--accent); text-decoration: none; flex-shrink: 0; }
+    .expl-link:hover { text-decoration: underline; }
+
+    /* ─── HUNT ─── */
+    .hunt-desc { color: var(--text2); font-size: 13.5px; margin-bottom: 14px; line-height: 1.7; }
+    .odds-pill {
+      display: inline-block;
+      background: var(--accent-dim);
+      border: 1px solid rgba(247,147,26,.25);
+      border-radius: var(--rs);
+      padding: 7px 14px;
+      font-size: 13px; color: var(--accent);
+      margin-bottom: 16px;
+    }
+
+    /* ─── WARNING BOX ─── */
+    .warn-box {
+      background: rgba(245,158,11,.08);
+      border: 1px solid rgba(245,158,11,.25);
+      border-radius: var(--rs);
+      padding: 10px 14px;
+      font-size: 12.5px; color: var(--warning);
+      margin-bottom: 14px;
+    }
+
+    /* ─── HINT ─── */
+    .hint { font-size: 12px; color: var(--text2); margin-bottom: 14px; }
+
+    /* ─── TOAST ─── */
+    .toast {
+      position: fixed; bottom: 24px; right: 24px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--rs);
+      padding: 11px 18px; font-size: 14px;
+      z-index: 1000;
+      transform: translateY(80px); opacity: 0;
+      transition: all .25s;
+      pointer-events: none;
+    }
+    .toast.show { transform: translateY(0); opacity: 1; }
+
+    /* ─── RESPONSIVE ─── */
+    @media (max-width: 580px) {
+      .stats-bar { grid-template-columns: repeat(2, 1fr); }
+      .header { flex-direction: column; gap: 10px; align-items: flex-start; }
+      .input-row { flex-direction: column; }
+    }
+  </style>
+</head>
+<body>
+
+<header class="header">
+  <div class="header-brand">
+    <span class="header-logo">₿</span>
+    <div>
+      <div class="header-title">BTC Seed Recovery Checker</div>
+      <div class="header-sub">Brain wallet &amp; BIP39 balance checker — runs entirely in your browser</div>
+    </div>
+  </div>
+  <div class="header-right">
+    <span class="badge badge-idle" id="statusBadge">⏸ Idle</span>
+  </div>
+</header>
+
+<div class="stats-bar">
+  <div class="stat">
+    <div class="stat-val" id="sWords">0</div>
+    <div class="stat-lbl">Words Checked</div>
+  </div>
+  <div class="stat">
+    <div class="stat-val" id="sVars">0</div>
+    <div class="stat-lbl">Variations Tried</div>
+  </div>
+  <div class="stat">
+    <div class="stat-val" id="sAddrs">0</div>
+    <div class="stat-lbl">Addresses Queried</div>
+  </div>
+  <div class="stat" style="--accent:var(--success)">
+    <div class="stat-val" id="sFound" style="color:var(--success)">0</div>
+    <div class="stat-lbl">Wallets Found</div>
+  </div>
+</div>
+
+<div class="container">
+
+  <!-- ─── CHECK CARD ─── -->
+  <div class="card">
+    <div class="card-title">🔍 Check a Word or Phrase</div>
+
+    <div class="warn-box">
+      ⚠️ This tool checks Bitcoin addresses derived from your passphrase for existing balances.
+      All computation happens locally in your browser — nothing is sent to any server.
+    </div>
+
+    <div class="input-row">
+      <input id="wordInput" type="text" class="input-field"
+        placeholder="Enter word, phrase or passphrase…"
+        autocomplete="off" autocorrect="off" spellcheck="false">
+    </div>
+
+    <div class="options-row">
+      <div class="opt-group">
+        <div class="opt-lbl">Derivation Mode</div>
+        <div class="toggle-row">
+          <button class="tbtn active" id="modeBW" onclick="setMode('brainwallet')">Brain Wallet</button>
+          <button class="tbtn" id="modeBIP" onclick="setMode('bip39')">BIP39 Seed</button>
+        </div>
+      </div>
+      <div class="opt-group">
+        <div class="opt-lbl">Search Depth</div>
+        <div class="toggle-row">
+          <button class="tbtn active" id="depthN" onclick="setDepth('normal')">Normal</button>
+          <button class="tbtn" id="depthD" onclick="setDepth('deep')">Deep</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="hint" id="modeHint">
+      Brain wallet: SHA256(passphrase) → private key · checks Legacy, SegWit &amp; Native SegWit addresses
+    </div>
+
+    <div class="btn-row">
+      <button class="btn btn-primary" id="btnCheck" onclick="startCheck()">🔍 Check Word</button>
+      <button class="btn btn-danger hidden" id="btnStop" onclick="stopCheck()">⏹ Stop</button>
+    </div>
+
+    <div class="prog-wrap hidden" id="progWrap">
+      <div class="prog-bar" id="progBar"></div>
+    </div>
+  </div>
+
+  <!-- ─── LIVE FEED ─── -->
+  <div class="card hidden" id="feedCard">
+    <div class="card-title" style="justify-content:space-between">
+      <span>📡 Live Feed</span>
+      <button onclick="clearFeed()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;">Clear</button>
+    </div>
+    <div class="feed" id="feed"></div>
+  </div>
+
+  <!-- ─── RESULTS ─── -->
+  <div class="card hidden" id="resultsCard">
+    <div class="card-title">
+      🏆 Found Wallets
+      <span class="badge badge-run" id="foundBadge">0</span>
+    </div>
+    <div id="resultsList"></div>
+  </div>
+
+  <!-- ─── RANDOM KEY HUNT ─── -->
+  <div class="card">
+    <div class="card-title">🎰 Random Key Hunt</div>
+    <p class="hunt-desc">
+      Randomly generate Bitcoin private keys and check their balances.
+      Each key has a 1 in 2<sup>256</sup> chance of holding funds — but someone has to find it!
+      Uses your browser's cryptographically secure RNG (<code>crypto.getRandomValues</code>).
+    </p>
+    <div class="odds-pill">
+      🎲 Probability per key: ~1 in 115 quattuorvigintillion — pure lottery odds
+    </div>
+
+    <div class="btn-row" style="margin-bottom:14px">
+      <button class="btn btn-secondary" id="bH10"   onclick="startHunt(10)">Hunt 10</button>
+      <button class="btn btn-secondary" id="bH100"  onclick="startHunt(100)">Hunt 100</button>
+      <button class="btn btn-secondary" id="bH1000" onclick="startHunt(1000)">Hunt 1 000</button>
+      <button class="btn btn-danger hidden" id="bHStop" onclick="stopHunt()">⏹ Stop</button>
+    </div>
+
+    <div class="feed" id="huntFeed" style="height:200px"></div>
+  </div>
+
+</div><!-- /container -->
+
+<div class="toast" id="toast"></div>
+
+<script type="module">
+// ═══════════════════════════════════════════════════
+//  IMPORTS — noble crypto libraries via esm.sh CDN
+// ═══════════════════════════════════════════════════
+import { sha256   } from 'https://esm.sh/@noble/hashes@1.7.2/sha256';
+import { ripemd160} from 'https://esm.sh/@noble/hashes@1.7.2/ripemd160';
+import { hmac     } from 'https://esm.sh/@noble/hashes@1.7.2/hmac';
+import { sha512   } from 'https://esm.sh/@noble/hashes@1.7.2/sha512';
+import { secp256k1} from 'https://esm.sh/@noble/curves@1.8.1/secp256k1';
+
+// ═══════════════════════════════════════════════════
+//  STATE
+// ═══════════════════════════════════════════════════
+let mode  = 'brainwallet';
+let depth = 'normal';
+let isChecking = false;
+let isHunting  = false;
+let stopCheck  = false;
+let stopHunt   = false;
+
+const stats = { words: 0, vars: 0, addrs: 0, found: 0, keys: 0 };
+
+// Expose UI handlers to inline onclick attributes
+window.setMode     = setMode;
+window.setDepth    = setDepth;
+window.startCheck  = startCheck;
+window.stopCheck   = () => { stopCheck = true; byId('btnStop').textContent = '⏳ Stopping…'; };
+window.startHunt   = startHunt;
+window.stopHunt    = () => { stopHunt = true; byId('bHStop').textContent = '⏳ Stopping…'; };
+window.clearFeed   = () => { byId('feed').innerHTML = ''; };
+
+// ═══════════════════════════════════════════════════
+//  UTILS
+// ═══════════════════════════════════════════════════
+const byId = id => document.getElementById(id);
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+function bytesToHex(b) {
+  return Array.from(b, x => x.toString(16).padStart(2, '0')).join('');
+}
+function hexToBytes(hex) {
+  if (hex.length & 1) hex = '0' + hex;
+  const b = new Uint8Array(hex.length >> 1);
+  for (let i = 0; i < hex.length; i += 2) b[i >> 1] = parseInt(hex.slice(i, i + 2), 16);
+  return b;
+}
+
+// ═══════════════════════════════════════════════════
+//  BITCOIN PRIMITIVES
+// ═══════════════════════════════════════════════════
+const B58 = '123456789ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz';
+
+function base58Encode(bytes) {
+  if (!bytes.length) return '';
+  let n = BigInt('0x' + bytesToHex(bytes));
+  let s = '';
+  while (n > 0n) { const r = Number(n % 58n); s = B58[r] + s; n /= 58n; }
+  for (const b of bytes) { if (b !== 0) break; s = '1' + s; }
+  return s;
+}
+
+function base58Check(version, payload) {
+  const full = new Uint8Array([version, ...payload]);
+  const chk  = sha256(sha256(full)).slice(0, 4);
+  return base58Encode(new Uint8Array([...full, ...chk]));
+}
+
+function hash160(pub) {
+  return ripemd160(sha256(pub));
+}
+
+// P2PKH  → 1...
+function pubToLegacy(pub) {
+  return base58Check(0x00, hash160(pub));
+}
+
+// P2SH-P2WPKH → 3...
+function pubToP2SH(pub) {
+  const h   = hash160(pub);
+  const rs  = new Uint8Array([0x00, 0x14, ...h]); // OP_0 PUSH20 <hash>
+  return base58Check(0x05, hash160(rs));
+}
+
+// Bech32 (native segwit P2WPKH) → bc1q...
+const B32C = 'qpzry9x8gf2tvdw0s3jn54khce6mua7l';
+const B32G = [0x3b6a57b2, 0x26508e6d, 0x1ea119fa, 0x3d4233dd, 0x2a1462b3];
+
+function b32Polymod(v) {
+  let c = 1;
+  for (const x of v) {
+    const t = c >> 25;
+    c = ((c & 0x1ffffff) << 5) ^ x;
+    for (let i = 0; i < 5; i++) if ((t >> i) & 1) c ^= B32G[i];
+  }
+  return c;
+}
+function b32Hrp(hrp) {
+  const r = [];
+  for (let i = 0; i < hrp.length; i++) r.push(hrp.charCodeAt(i) >> 5);
+  r.push(0);
+  for (let i = 0; i < hrp.length; i++) r.push(hrp.charCodeAt(i) & 31);
+  return r;
+}
+function b32Checksum(hrp, data) {
+  const poly = b32Polymod([...b32Hrp(hrp), ...data, 0, 0, 0, 0, 0, 0]) ^ 1;
+  return Array.from({ length: 6 }, (_, i) => (poly >> (5 * (5 - i))) & 31);
+}
+function convertBits(data, from, to, pad = true) {
+  let acc = 0, bits = 0;
+  const out = [], maxv = (1 << to) - 1;
+  for (const v of data) {
+    acc = (acc << from) | v; bits += from;
+    while (bits >= to) { bits -= to; out.push((acc >> bits) & maxv); }
+  }
+  if (pad && bits > 0) out.push((acc << (to - bits)) & maxv);
+  return out;
+}
+function pubToNative(pub) {
+  const h    = hash160(pub);
+  const data = [0, ...convertBits(Array.from(h), 8, 5)];
+  return 'bc1' + [...data, ...b32Checksum('bc', data)].map(d => B32C[d]).join('');
+}
+
+function toWIF(privBytes, compressed = true) {
+  const d   = new Uint8Array([0x80, ...privBytes, ...(compressed ? [0x01] : [])]);
+  const chk = sha256(sha256(d)).slice(0, 4);
+  return base58Encode(new Uint8Array([...d, ...chk]));
+}
+
+// ═══════════════════════════════════════════════════
+//  BRAIN WALLET  — SHA256(passphrase) → addresses
+// ═══════════════════════════════════════════════════
+function deriveBrainWallet(passphrase) {
+  const priv = sha256(new TextEncoder().encode(passphrase));
+  const pubC = secp256k1.getPublicKey(priv, true);
+  const pubU = secp256k1.getPublicKey(priv, false);
+  return {
+    privHex: bytesToHex(priv),
+    wif:     toWIF(priv, true),
+    wifU:    toWIF(priv, false),
+    addrs: {
+      legacyC:  pubToLegacy(pubC),
+      legacyU:  pubToLegacy(pubU),
+      p2sh:     pubToP2SH(pubC),
+      native:   pubToNative(pubC),
+    },
+  };
+}
+
+// ═══════════════════════════════════════════════════
+//  BIP39 + BIP32  — mnemonic → m/44'/0'/0'/0/0
+// ═══════════════════════════════════════════════════
+const N_SECP = 0xFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFFEBAAEDCE6AF48A03BBFD25E8CD0364141n;
+
+function u32BE(n) {
+  return [(n >>> 24) & 0xff, (n >>> 16) & 0xff, (n >>> 8) & 0xff, n & 0xff];
+}
+
+async function deriveBip39(mnemonic) {
+  const enc  = new TextEncoder();
+  const mn   = enc.encode(mnemonic.normalize('NFKD'));
+  const salt = enc.encode('mnemonic');
+
+  const km  = await crypto.subtle.importKey('raw', mn, { name: 'PBKDF2' }, false, ['deriveBits']);
+  const buf = await crypto.subtle.deriveBits(
+    { name: 'PBKDF2', salt, iterations: 2048, hash: 'SHA-512' }, km, 512
+  );
+  const seed = new Uint8Array(buf);
+
+  // BIP32 master key
+  const I0   = hmac(sha512, enc.encode('Bitcoin seed'), seed);
+  let priv   = I0.slice(0, 32);
+  let chain  = I0.slice(32);
+
+  // m/44'/0'/0'/0/0
+  for (const idx of [0x8000002c, 0x80000000, 0x80000000, 0, 0]) {
+    const hard = idx >= 0x80000000;
+    const data = hard
+      ? new Uint8Array([0x00, ...priv, ...u32BE(idx)])
+      : new Uint8Array([...secp256k1.getPublicKey(priv, true), ...u32BE(idx)]);
+    const Ic  = hmac(sha512, chain, data);
+    const IL  = Ic.slice(0, 32);
+    chain     = Ic.slice(32);
+    const child = (BigInt('0x' + bytesToHex(IL)) + BigInt('0x' + bytesToHex(priv))) % N_SECP;
+    priv = hexToBytes(child.toString(16).padStart(64, '0'));
+  }
+
+  const pubC = secp256k1.getPublicKey(priv, true);
+  return {
+    privHex: bytesToHex(priv),
+    wif:     toWIF(priv, true),
+    addrs: {
+      legacyC: pubToLegacy(pubC),
+      native:  pubToNative(pubC),
+    },
+  };
+}
+
+// ═══════════════════════════════════════════════════
+//  WORD VARIATIONS
+// ═══════════════════════════════════════════════════
+function generateVariations(word, dep) {
+  const w  = word.trim();
+  const wl = w.toLowerCase();
+  const wu = w.toUpperCase();
+  const wc = wl[0].toUpperCase() + wl.slice(1);
+  const leet = wl
+    .replace(/a/g,'4').replace(/e/g,'3').replace(/i/g,'1')
+    .replace(/o/g,'0').replace(/s/g,'5').replace(/t/g,'7');
+
+  const out = new Set([w, wl, wu, wc]);
+  if (leet !== wl) out.add(leet);
+
+  // Suffixes
+  for (const s of ['1','2','12','123','1234','12345','!','!!','123!','007','69','420']) {
+    out.add(wl + s);
+  }
+  // Bitcoin era years
+  for (const y of ['2009','2010','2011','2012','2013']) out.add(wl + y);
+
+  // Prefixes
+  for (const p of ['my', 'the', 'i']) out.add(p + wl);
+
+  if (dep === 'deep') {
+    // All years 2009–2023
+    for (let y = 2009; y <= 2023; y++) { out.add(wl + y); out.add(y + wl); }
+    // Double
+    out.add(wl + wl);
+    // Leet with suffixes
+    for (const s of ['1','123','!','2009','2010','2011']) out.add(leet + s);
+    // Capitalized leet
+    out.add(leet[0].toUpperCase() + leet.slice(1));
+    // Alternating caps
+    out.add([...wl].map((c, i) => i % 2 === 0 ? c.toUpperCase() : c).join(''));
+    // Space / separator variants
+    if (w.includes(' ')) {
+      out.add(w.replace(/\s+/g, ''));
+      out.add(w.replace(/\s+/g, '_'));
+      out.add(w.replace(/\s+/g, '.'));
+      out.add(w.replace(/\s+/g, '-'));
+      out.add(w.replace(/\s+/g, ''));
+    }
+    // Extra lucky numbers
+    for (const n of ['777','666','88','99','2017','2018','2020','2021']) out.add(wl + n);
+  }
+
+  return [...out].filter(v => v.length > 0 && v.length <= 80);
+}
+
+// ═══════════════════════════════════════════════════
+//  BALANCE CHECKER
+// ═══════════════════════════════════════════════════
+async function checkBalances(addresses) {
+  if (!addresses.length) return {};
+  const res = {};
+
+  // ── blockchain.info multiaddr (batch, handles all address types) ──
+  try {
+    const url  = `https://blockchain.info/multiaddr?active=${addresses.join('|')}&n=0`;
+    const resp = await fetch(url, { signal: AbortSignal.timeout(12000) });
+    if (resp.ok) {
+      const data = await resp.json();
+      for (const a of (data.addresses || [])) {
+        res[a.address] = { balance: a.final_balance / 1e8, txCount: a.n_tx };
+      }
+      for (const addr of addresses) {
+        if (!res[addr]) res[addr] = { balance: 0, txCount: 0 };
+      }
+      return res;
+    }
+  } catch (_) { /* fall through to blockstream */ }
+
+  // ── blockstream.info fallback (individual queries) ──
+  for (const addr of addresses) {
+    if (res[addr]) continue;
+    try {
+      const resp = await fetch(
+        `https://blockstream.info/api/address/${addr}`,
+        { signal: AbortSignal.timeout(8000) }
+      );
+      if (resp.ok) {
+        const d   = await resp.json();
+        const bal = (d.chain_stats.funded_txo_sum - d.chain_stats.spent_txo_sum) / 1e8;
+        res[addr] = { balance: bal, txCount: d.chain_stats.tx_count };
+      } else {
+        res[addr] = { balance: 0, txCount: 0 };
+      }
+    } catch (_) {
+      res[addr] = { balance: 0, txCount: 0 };
+    }
+    await sleep(100);
+  }
+
+  return res;
+}
+
+// ═══════════════════════════════════════════════════
+//  UI HELPERS
+// ═══════════════════════════════════════════════════
+function updateStats() {
+  byId('sWords').textContent = stats.words.toLocaleString();
+  byId('sVars').textContent  = stats.vars.toLocaleString();
+  byId('sAddrs').textContent = stats.addrs.toLocaleString();
+  byId('sFound').textContent = stats.found;
+}
+
+function ts() {
+  return new Date().toLocaleTimeString('en', { hour12: false, hour:'2-digit', minute:'2-digit', second:'2-digit' });
+}
+
+function addFeed(msg, cls = 'fe-info') {
+  const feed = byId('feed');
+  byId('feedCard').classList.remove('hidden');
+  const el  = document.createElement('div');
+  el.className = `feed-entry ${cls}`;
+  const tsEl = document.createElement('span');
+  tsEl.className = 'fe-ts';
+  tsEl.textContent = ts();
+  el.appendChild(tsEl);
+  el.appendChild(document.createTextNode(' ' + msg));
+  feed.appendChild(el);
+  feed.scrollTop = feed.scrollHeight;
+  return el;
+}
+
+function updateLastFeed(msg, cls) {
+  const feed = byId('feed');
+  const last = feed.lastElementChild;
+  if (!last) return;
+  last.className = `feed-entry ${cls}`;
+  const tsEl = last.querySelector('.fe-ts');
+  last.textContent = '';
+  if (tsEl) last.appendChild(tsEl);
+  last.appendChild(document.createTextNode(' ' + msg));
+}
+
+function addHuntFeed(msg, cls = 'fe-info') {
+  const feed = byId('huntFeed');
+  const el   = document.createElement('div');
+  el.className = `feed-entry ${cls}`;
+  el.textContent = `${ts()} ${msg}`;
+  feed.appendChild(el);
+  while (feed.children.length > 200) feed.removeChild(feed.firstChild);
+  feed.scrollTop = feed.scrollHeight;
+}
+
+function setProgress(pct) {
+  const wrap = byId('progWrap');
+  const bar  = byId('progBar');
+  wrap.classList.remove('hidden');
+  if (pct < 0) {
+    bar.classList.add('ind');
+  } else {
+    bar.classList.remove('ind');
+    bar.style.width = pct + '%';
+  }
+  if (pct >= 100) setTimeout(() => wrap.classList.add('hidden'), 600);
+}
+
+function showToast(msg, dur = 2800) {
+  const t = byId('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), dur);
+}
+
+function showResult(label, addr, balance, txCount, keyInfo) {
+  const card = byId('resultsCard');
+  card.classList.remove('hidden');
+
+  const btc  = typeof balance === 'number' ? balance.toFixed(8) : String(balance);
+  const eurl = addr.startsWith('bc1')
+    ? `https://blockstream.info/address/${addr}`
+    : `https://www.blockchain.com/explorer/addresses/btc/${addr}`;
+
+  const div  = document.createElement('div');
+  div.className = 'result-item';
+
+  // Balance
+  const balDiv = document.createElement('div');
+  balDiv.className = 'result-bal';
+  balDiv.textContent = `${btc} BTC`;
+  div.appendChild(balDiv);
+
+  // Helper: row with label, value, copy btn, optional link
+  const addRow = (lbl, val, link) => {
+    const row  = document.createElement('div');
+    row.className = 'result-field';
+
+    const l = document.createElement('span'); l.className = 'rf-lbl'; l.textContent = lbl;
+    const v = document.createElement('span'); v.className = 'rf-val'; v.textContent = val;
+    const c = document.createElement('button'); c.className = 'copy-btn'; c.textContent = 'Copy';
+    c.addEventListener('click', () => navigator.clipboard.writeText(val).then(() => showToast('✓ Copied!')));
+
+    row.appendChild(l); row.appendChild(v); row.appendChild(c);
+    if (link) {
+      const a = document.createElement('a');
+      a.className = 'expl-link'; a.href = link; a.target = '_blank'; a.rel = 'noopener';
+      a.textContent = 'Explorer ↗';
+      row.appendChild(a);
+    }
+    div.appendChild(row);
+  };
+
+  addRow('Passphrase', label);
+  addRow('Address', addr, eurl);
+  if (keyInfo.wif)     addRow('WIF (comp)', keyInfo.wif);
+  if (keyInfo.wifU)    addRow('WIF (uncomp)', keyInfo.wifU);
+  if (keyInfo.privHex) addRow('Priv Key', keyInfo.privHex);
+
+  if (txCount > 0) {
+    const info = document.createElement('div');
+    info.style.cssText = 'font-size:12px;color:var(--text2);margin-top:8px';
+    info.textContent = `${txCount} transaction(s) recorded on this address`;
+    div.appendChild(info);
+  }
+
+  const warn = document.createElement('div');
+  warn.style.cssText = 'font-size:11px;color:var(--danger);margin-top:8px';
+  warn.textContent = '⚠️ Save this key immediately — it is not stored anywhere';
+  div.appendChild(warn);
+
+  byId('resultsList').prepend(div);
+
+  stats.found++;
+  byId('foundBadge').textContent = stats.found;
+  updateStats();
+
+  card.scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ═══════════════════════════════════════════════════
+//  TOGGLE CONTROLS
+// ═══════════════════════════════════════════════════
+function setMode(m) {
+  mode = m;
+  byId('modeBW').classList.toggle('active',  m === 'brainwallet');
+  byId('modeBIP').classList.toggle('active', m === 'bip39');
+  byId('modeHint').textContent = m === 'brainwallet'
+    ? "Brain wallet: SHA256(passphrase) → private key · checks Legacy, P2SH-SegWit & Native SegWit addresses"
+    : "BIP39 seed: PBKDF2(2048) + BIP32 m/44'/0'/0'/0/0 · slower, checks Legacy & Native SegWit";
+}
+function setDepth(d) {
+  depth = d;
+  byId('depthN').classList.toggle('active', d === 'normal');
+  byId('depthD').classList.toggle('active', d === 'deep');
+}
+
+// ═══════════════════════════════════════════════════
+//  MAIN CHECK FLOW
+// ═══════════════════════════════════════════════════
+async function startCheck() {
+  const word = byId('wordInput').value.trim();
+  if (!word)       { showToast('Enter a word or phrase first'); return; }
+  if (isChecking)  return;
+
+  isChecking = true;
+  stopCheck  = false;
+
+  byId('btnCheck').classList.add('hidden');
+  byId('btnStop').classList.remove('hidden');
+  byId('btnStop').textContent = '⏹ Stop';
+  byId('statusBadge').innerHTML = '<span class="pulse"></span> Running';
+  byId('statusBadge').className = 'badge badge-run';
+
+  const vars = generateVariations(word, depth);
+  stats.vars += vars.length;
+  updateStats();
+
+  addFeed(`🔍 "${word}" — ${vars.length} variations (${mode}, ${depth})`, 'fe-info');
+
+  for (let i = 0; i < vars.length; i++) {
+    if (stopCheck) break;
+
+    const v = vars[i];
+    setProgress(Math.round(i / vars.length * 100));
+
+    let keyInfo, addrs;
+    try {
+      if (mode === 'brainwallet') {
+        keyInfo = deriveBrainWallet(v);
+        addrs   = [keyInfo.addrs.legacyC, keyInfo.addrs.legacyU, keyInfo.addrs.p2sh, keyInfo.addrs.native];
+      } else {
+        keyInfo = await deriveBip39(v);
+        addrs   = [keyInfo.addrs.legacyC, keyInfo.addrs.native];
+      }
+    } catch (e) {
+      addFeed(`Error deriving "${v}": ${e.message}`, 'fe-error');
+      continue;
+    }
+
+    addFeed(`Checking: "${v}"…`, 'fe-checking');
+
+    let bals;
+    try {
+      bals = await checkBalances(addrs);
+    } catch (e) {
+      updateLastFeed(`⚠️ API error for "${v}"`, 'fe-error');
+      await sleep(1000);
+      continue;
+    }
+
+    stats.addrs += addrs.length;
+
+    let anyBal  = false;
+    let anyUsed = false;
+    for (const [addr, info] of Object.entries(bals)) {
+      if (info.balance > 0) {
+        anyBal = true;
+        showResult(v, addr, info.balance, info.txCount, keyInfo);
+        addFeed(`🏆 BALANCE: "${v}" → ${addr} — ${info.balance.toFixed(8)} BTC`, 'fe-found');
+      } else if (info.txCount > 0 && !anyBal) {
+        anyUsed = true;
+      }
+    }
+
+    if (!anyBal) {
+      if (anyUsed) {
+        updateLastFeed(`👁 "${v}" — used (0 BTC, already swept)`, 'fe-used');
+      } else {
+        updateLastFeed(`❌ "${v}" — empty`, 'fe-empty');
+      }
+    }
+
+    stats.words++;
+    updateStats();
+
+    await sleep(mode === 'bip39' ? 600 : 250);
+  }
+
+  setProgress(100);
+  addFeed(stopCheck
+    ? `⏹ Stopped — ${stats.words} variations tried`
+    : `✅ Done — all ${vars.length} variations checked`,
+    'fe-info'
+  );
+
+  isChecking = false;
+  byId('btnCheck').classList.remove('hidden');
+  byId('btnStop').classList.add('hidden');
+  byId('statusBadge').textContent = '⏸ Idle';
+  byId('statusBadge').className = 'badge badge-idle';
+}
+
+// ═══════════════════════════════════════════════════
+//  RANDOM KEY HUNT
+// ═══════════════════════════════════════════════════
+async function startHunt(count) {
+  if (isHunting) return;
+  isHunting = true;
+  stopHunt  = false;
+
+  ['bH10','bH100','bH1000'].forEach(id => byId(id).disabled = true);
+  byId('bHStop').classList.remove('hidden');
+  byId('bHStop').textContent = '⏹ Stop';
+
+  addHuntFeed(`🎰 Starting hunt — ${count} random keys`, 'fe-info');
+
+  let thisFound = 0;
+
+  for (let i = 0; i < count; i++) {
+    if (stopHunt) break;
+
+    const privBytes = crypto.getRandomValues(new Uint8Array(32));
+
+    let pubC;
+    try {
+      pubC = secp256k1.getPublicKey(privBytes, true);
+    } catch (_) {
+      continue; // invalid scalar (astronomically rare)
+    }
+
+    const legacy = pubToLegacy(pubC);
+    const native = pubToNative(pubC);
+
+    addHuntFeed(`[${i + 1}/${count}] ${legacy.slice(0, 14)}… checking…`, 'fe-checking');
+
+    let bals;
+    try {
+      bals = await checkBalances([legacy, native]);
+    } catch (_) {
+      await sleep(500);
+      continue;
+    }
+
+    stats.keys++;
+    stats.addrs += 2;
+    updateStats();
+
+    for (const [addr, info] of Object.entries(bals)) {
+      if (info.balance > 0) {
+        thisFound++;
+        const ki = { privHex: bytesToHex(privBytes), wif: toWIF(privBytes, true), wifU: toWIF(privBytes, false) };
+        showResult(`RANDOM KEY #${stats.keys}`, addr, info.balance, info.txCount, ki);
+        addHuntFeed(`🎰 JACKPOT! ${addr} — ${info.balance.toFixed(8)} BTC`, 'fe-jackpot');
+      }
+    }
+
+    await sleep(420);
+  }
+
+  addHuntFeed(
+    stopHunt
+      ? `⏹ Hunt stopped — ${stats.keys} total keys hunted, ${thisFound} found this run`
+      : `✅ Complete — ${count} keys checked, ${thisFound} found`,
+    'fe-info'
+  );
+
+  isHunting = false;
+  ['bH10','bH100','bH1000'].forEach(id => byId(id).disabled = false);
+  byId('bHStop').classList.add('hidden');
+}
+
+// ═══════════════════════════════════════════════════
+//  KEYBOARD SHORTCUT
+// ═══════════════════════════════════════════════════
+byId('wordInput').addEventListener('keydown', e => {
+  if (e.key === 'Enter' && !isChecking) startCheck();
+});
+
+// ─── INIT ───
+updateStats();
+</script>
+</body>
+</html>
