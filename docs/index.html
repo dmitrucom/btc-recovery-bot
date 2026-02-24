@@ -4,6 +4,8 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>BTC Seed Recovery Checker</title>
+  <!-- Telegram WebApp SDK — enables in-app theming and close button -->
+  <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
@@ -26,6 +28,50 @@
       --r: 12px;
       --rs: 8px;
     }
+
+    /* Telegram WebApp theme overrides — active when opened inside Telegram */
+    .tg-theme {
+      --bg:       var(--tg-theme-bg-color, #080812);
+      --surface:  var(--tg-theme-secondary-bg-color, #0f0f1c);
+      --text:     var(--tg-theme-text-color, #e2e8f0);
+      --text2:    var(--tg-theme-hint-color, #8892a4);
+      --accent:   var(--tg-theme-button-color, #f7931a);
+    }
+
+    /* Tab navigation */
+    .tabs {
+      display: flex;
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 0; z-index: 9;
+    }
+    .tab {
+      flex: 1; padding: 12px 8px;
+      font-size: 13px; font-weight: 600;
+      text-align: center; cursor: pointer;
+      border: none; background: transparent;
+      color: var(--text2);
+      border-bottom: 2px solid transparent;
+      transition: all .2s;
+    }
+    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+    /* Batch textarea */
+    .textarea {
+      width: 100%;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--rs);
+      padding: 11px 14px;
+      color: var(--text);
+      font-size: 14px; line-height: 1.6;
+      outline: none; resize: vertical;
+      min-height: 120px;
+      font-family: inherit;
+      transition: border-color .2s, box-shadow .2s;
+    }
+    .textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+    .textarea::placeholder { color: var(--text3); }
 
     html { scroll-behavior: smooth; }
 
@@ -306,9 +352,17 @@
   </div>
 </div>
 
+<!-- ─── TABS ─── -->
+<nav class="tabs" id="tabBar">
+  <button class="tab active" onclick="switchTab('single')">🔍 Single Word</button>
+  <button class="tab" onclick="switchTab('batch')">📋 Batch Check</button>
+  <button class="tab" onclick="switchTab('hunt')">🎰 Key Hunt</button>
+</nav>
+
 <div class="container">
 
-  <!-- ─── CHECK CARD ─── -->
+  <!-- ─── SINGLE CHECK PANEL ─── -->
+  <div class="tab-panel" id="panelSingle">
   <div class="card">
     <div class="card-title">🔍 Check a Word or Phrase</div>
 
@@ -363,7 +417,7 @@
     <div class="feed" id="feed"></div>
   </div>
 
-  <!-- ─── RESULTS ─── -->
+  <!-- ─── RESULTS (shared across tabs) ─── -->
   <div class="card hidden" id="resultsCard">
     <div class="card-title">
       🏆 Found Wallets
@@ -372,27 +426,86 @@
     <div id="resultsList"></div>
   </div>
 
-  <!-- ─── RANDOM KEY HUNT ─── -->
-  <div class="card">
-    <div class="card-title">🎰 Random Key Hunt</div>
-    <p class="hunt-desc">
-      Randomly generate Bitcoin private keys and check their balances.
-      Each key has a 1 in 2<sup>256</sup> chance of holding funds — but someone has to find it!
-      Uses your browser's cryptographically secure RNG (<code>crypto.getRandomValues</code>).
-    </p>
-    <div class="odds-pill">
-      🎲 Probability per key: ~1 in 115 quattuorvigintillion — pure lottery odds
+  </div><!-- /panelSingle -->
+
+
+  <!-- ─── BATCH CHECK PANEL ─── -->
+  <div class="tab-panel hidden" id="panelBatch">
+
+    <div class="card">
+      <div class="card-title">📋 Batch Check</div>
+      <div class="warn-box">
+        Paste a list of words/phrases — one per line. Each will be checked with all variations.
+        Runs entirely in your browser using your IP address.
+      </div>
+
+      <div style="margin-bottom:14px">
+        <textarea id="batchInput" class="textarea"
+          placeholder="Enter words, one per line:&#10;satoshi&#10;nakamoto&#10;bitcoin&#10;password123&#10;..."></textarea>
+      </div>
+
+      <div class="options-row">
+        <div class="opt-group">
+          <div class="opt-lbl">Derivation Mode</div>
+          <div class="toggle-row">
+            <button class="tbtn active" id="batchModeBW"  onclick="setBatchMode('brainwallet')">Brain Wallet</button>
+            <button class="tbtn"        id="batchModeBIP" onclick="setBatchMode('bip39')">BIP39 Seed</button>
+          </div>
+        </div>
+        <div class="opt-group">
+          <div class="opt-lbl">Search Depth</div>
+          <div class="toggle-row">
+            <button class="tbtn active" id="batchDepthN" onclick="setBatchDepth('normal')">Normal</button>
+            <button class="tbtn"        id="batchDepthD" onclick="setBatchDepth('deep')">Deep</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btnBatchCheck" onclick="startBatch()">🔍 Check All Words</button>
+        <button class="btn btn-danger hidden" id="btnBatchStop" onclick="stopBatch()">⏹ Stop</button>
+      </div>
+
+      <div class="prog-wrap hidden" id="batchProgWrap">
+        <div class="prog-bar" id="batchProgBar"></div>
+      </div>
     </div>
 
-    <div class="btn-row" style="margin-bottom:14px">
-      <button class="btn btn-secondary" id="bH10"   onclick="startHunt(10)">Hunt 10</button>
-      <button class="btn btn-secondary" id="bH100"  onclick="startHunt(100)">Hunt 100</button>
-      <button class="btn btn-secondary" id="bH1000" onclick="startHunt(1000)">Hunt 1 000</button>
-      <button class="btn btn-danger hidden" id="bHStop" onclick="stopHunt()">⏹ Stop</button>
+    <div class="card hidden" id="batchFeedCard">
+      <div class="card-title" style="justify-content:space-between">
+        <span>📡 Batch Feed</span>
+        <span id="batchProgress" style="font-size:12px;color:var(--text2)"></span>
+      </div>
+      <div class="feed" id="batchFeed"></div>
     </div>
 
-    <div class="feed" id="huntFeed" style="height:200px"></div>
-  </div>
+  </div><!-- /panelBatch -->
+
+  <!-- ─── RANDOM KEY HUNT PANEL ─── -->
+  <div class="tab-panel hidden" id="panelHunt">
+
+    <div class="card">
+      <div class="card-title">🎰 Random Key Hunt</div>
+      <p class="hunt-desc">
+        Randomly generate Bitcoin private keys and check their balances.
+        Each key has a 1 in 2<sup>256</sup> chance of holding funds — but someone has to find it!
+        Uses your browser's cryptographically secure RNG (<code>crypto.getRandomValues</code>).
+      </p>
+      <div class="odds-pill">
+        🎲 Probability per key: ~1 in 115 quattuorvigintillion — pure lottery odds
+      </div>
+
+      <div class="btn-row" style="margin-bottom:14px">
+        <button class="btn btn-secondary" id="bH10"   onclick="startHunt(10)">Hunt 10</button>
+        <button class="btn btn-secondary" id="bH100"  onclick="startHunt(100)">Hunt 100</button>
+        <button class="btn btn-secondary" id="bH1000" onclick="startHunt(1000)">Hunt 1 000</button>
+        <button class="btn btn-danger hidden" id="bHStop" onclick="stopHunt()">⏹ Stop</button>
+      </div>
+
+      <div class="feed" id="huntFeed" style="height:240px"></div>
+    </div>
+
+  </div><!-- /panelHunt -->
 
 </div><!-- /container -->
 
@@ -409,25 +522,66 @@ import { sha512   } from 'https://esm.sh/@noble/hashes@1.7.2/sha512';
 import { secp256k1} from 'https://esm.sh/@noble/curves@1.8.1/secp256k1';
 
 // ═══════════════════════════════════════════════════
+//  TELEGRAM WEBAPP INIT
+// ═══════════════════════════════════════════════════
+const tg = window.Telegram?.WebApp;
+if (tg) {
+  tg.ready();
+  tg.expand(); // full-screen in Telegram
+  // Apply Telegram theme to root element
+  if (tg.colorScheme === 'light') {
+    // light mode: keep our dark theme but signal awareness
+    document.documentElement.style.setProperty('--bg', '#ffffff');
+    document.documentElement.style.setProperty('--surface', '#f0f0f5');
+    document.documentElement.style.setProperty('--surface2', '#e8e8ef');
+    document.documentElement.style.setProperty('--text', '#000000');
+    document.documentElement.style.setProperty('--text2', '#555555');
+    document.documentElement.style.setProperty('--border', '#d0d0d8');
+    document.documentElement.style.setProperty('--text3', '#999999');
+    document.documentElement.style.setProperty('--surface3', '#dcdce4');
+  }
+}
+
+// ═══════════════════════════════════════════════════
 //  STATE
 // ═══════════════════════════════════════════════════
 let mode  = 'brainwallet';
 let depth = 'normal';
+let batchMode  = 'brainwallet';
+let batchDepth = 'normal';
 let isChecking = false;
 let isHunting  = false;
+let isBatching = false;
 let stopCheck  = false;
 let stopHunt   = false;
+let stopBatchFlag = false;
 
 const stats = { words: 0, vars: 0, addrs: 0, found: 0, keys: 0 };
 
 // Expose UI handlers to inline onclick attributes
-window.setMode     = setMode;
-window.setDepth    = setDepth;
-window.startCheck  = startCheck;
-window.stopCheck   = () => { stopCheck = true; byId('btnStop').textContent = '⏳ Stopping…'; };
-window.startHunt   = startHunt;
-window.stopHunt    = () => { stopHunt = true; byId('bHStop').textContent = '⏳ Stopping…'; };
-window.clearFeed   = () => { byId('feed').innerHTML = ''; };
+window.setMode       = setMode;
+window.setDepth      = setDepth;
+window.setBatchMode  = setBatchMode;
+window.setBatchDepth = setBatchDepth;
+window.startCheck    = startCheck;
+window.stopCheck     = () => { stopCheck = true; byId('btnStop').textContent = '⏳ Stopping…'; };
+window.startHunt     = startHunt;
+window.stopHunt      = () => { stopHunt = true; byId('bHStop').textContent = '⏳ Stopping…'; };
+window.startBatch    = startBatch;
+window.stopBatch     = () => { stopBatchFlag = true; byId('btnBatchStop').textContent = '⏳ Stopping…'; };
+window.clearFeed     = () => { byId('feed').innerHTML = ''; };
+window.switchTab     = switchTab;
+
+// ═══════════════════════════════════════════════════
+//  TAB SWITCHING
+// ═══════════════════════════════════════════════════
+function switchTab(name) {
+  document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  byId('panel' + name.charAt(0).toUpperCase() + name.slice(1)).classList.remove('hidden');
+  const tabs = { single: 0, batch: 1, hunt: 2 };
+  document.querySelectorAll('.tab')[tabs[name]]?.classList.add('active');
+}
 
 // ═══════════════════════════════════════════════════
 //  UTILS
@@ -1009,6 +1163,134 @@ async function startHunt(count) {
   isHunting = false;
   ['bH10','bH100','bH1000'].forEach(id => byId(id).disabled = false);
   byId('bHStop').classList.add('hidden');
+}
+
+// ═══════════════════════════════════════════════════
+//  BATCH MODE TOGGLES
+// ═══════════════════════════════════════════════════
+function setBatchMode(m) {
+  batchMode = m;
+  byId('batchModeBW').classList.toggle('active',  m === 'brainwallet');
+  byId('batchModeBIP').classList.toggle('active', m === 'bip39');
+}
+function setBatchDepth(d) {
+  batchDepth = d;
+  byId('batchDepthN').classList.toggle('active', d === 'normal');
+  byId('batchDepthD').classList.toggle('active', d === 'deep');
+}
+
+// ═══════════════════════════════════════════════════
+//  BATCH CHECK FLOW
+// ═══════════════════════════════════════════════════
+async function startBatch() {
+  const raw = byId('batchInput').value.trim();
+  if (!raw) { showToast('Paste some words first'); return; }
+  if (isBatching) return;
+
+  const words = [...new Set(raw.split(/[\n,]+/).map(w => w.trim()).filter(w => w.length > 0 && w.length <= 80))];
+  if (words.length === 0) { showToast('No valid words found'); return; }
+
+  isBatching = true;
+  stopBatchFlag = false;
+
+  byId('btnBatchCheck').classList.add('hidden');
+  byId('btnBatchStop').classList.remove('hidden');
+  byId('btnBatchStop').textContent = '⏹ Stop';
+  byId('batchFeedCard').classList.remove('hidden');
+
+  const feed = byId('batchFeed');
+  feed.innerHTML = '';
+
+  let wordsDone = 0;
+
+  function batchFeedLine(msg, cls = 'fe-info') {
+    const el = document.createElement('div');
+    el.className = `feed-entry ${cls}`;
+    el.textContent = `${ts()} ${msg}`;
+    feed.appendChild(el);
+    while (feed.children.length > 300) feed.removeChild(feed.firstChild);
+    feed.scrollTop = feed.scrollHeight;
+    return el;
+  }
+  function updateBatchLast(msg, cls) {
+    const last = feed.lastElementChild;
+    if (!last) return;
+    last.className = `feed-entry ${cls}`;
+    last.textContent = `${ts()} ${msg}`;
+  }
+
+  batchFeedLine(`🔍 Batch: ${words.length} words · mode=${batchMode} · depth=${batchDepth}`, 'fe-info');
+
+  for (let wi = 0; wi < words.length; wi++) {
+    if (stopBatchFlag) break;
+
+    const word = words[wi];
+    byId('batchProgress').textContent = `${wi + 1} / ${words.length}`;
+
+    const pct = Math.round(wi / words.length * 100);
+    byId('batchProgWrap').classList.remove('hidden');
+    byId('batchProgBar').style.width = pct + '%';
+
+    const vars = generateVariations(word, batchDepth);
+    stats.vars += vars.length;
+
+    for (let vi = 0; vi < vars.length; vi++) {
+      if (stopBatchFlag) break;
+
+      const v = vars[vi];
+      let keyInfo, addrs;
+      try {
+        if (batchMode === 'brainwallet') {
+          keyInfo = deriveBrainWallet(v);
+          addrs   = [keyInfo.addrs.legacyC, keyInfo.addrs.legacyU, keyInfo.addrs.p2sh, keyInfo.addrs.native];
+        } else {
+          keyInfo = await deriveBip39(v);
+          addrs   = [keyInfo.addrs.legacyC, keyInfo.addrs.native];
+        }
+      } catch (e) { continue; }
+
+      batchFeedLine(`[${wi+1}/${words.length}] "${v}"…`, 'fe-checking');
+
+      let bals;
+      try { bals = await checkBalances(addrs); } catch(e) { await sleep(500); continue; }
+
+      stats.addrs += addrs.length;
+
+      let anyBal = false, anyUsed = false;
+      for (const [addr, info] of Object.entries(bals)) {
+        if (info.balance > 0) {
+          anyBal = true;
+          showResult(v, addr, info.balance, info.txCount, keyInfo);
+          batchFeedLine(`🏆 FOUND: "${v}" → ${info.balance.toFixed(8)} BTC`, 'fe-found');
+        } else if (info.txCount > 0 && !anyBal) {
+          anyUsed = true;
+        }
+      }
+      if (!anyBal) {
+        updateBatchLast(
+          anyUsed ? `👁 "${v}" — used (0 BTC, swept)` : `❌ "${v}" — empty`,
+          anyUsed ? 'fe-used' : 'fe-empty'
+        );
+      }
+
+      stats.words++;
+      updateStats();
+      await sleep(batchMode === 'bip39' ? 600 : 250);
+    }
+
+    wordsDone++;
+  }
+
+  byId('batchProgBar').style.width = '100%';
+  byId('batchProgress').textContent = `Done — ${wordsDone} words`;
+  batchFeedLine(
+    stopBatchFlag ? `⏹ Stopped — ${wordsDone} of ${words.length} words` : `✅ Batch complete — ${words.length} words`,
+    'fe-info'
+  );
+
+  isBatching = false;
+  byId('btnBatchCheck').classList.remove('hidden');
+  byId('btnBatchStop').classList.add('hidden');
 }
 
 // ═══════════════════════════════════════════════════
