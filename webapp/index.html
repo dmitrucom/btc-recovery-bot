@@ -3,75 +3,33 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>BTC Seed Recovery Checker</title>
-  <!-- Telegram WebApp SDK — enables in-app theming and close button -->
+  <title>QBTC Scanner — Bitcoin Recovery</title>
   <script src="https://telegram.org/js/telegram-web-app.js"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
     :root {
-      --bg: #080812;
-      --surface: #0f0f1c;
-      --surface2: #161626;
-      --surface3: #1e1e32;
-      --border: #2a2a45;
-      --text: #e2e8f0;
-      --text2: #8892a4;
-      --text3: #3a4158;
-      --accent: #f7931a;
-      --accent-dim: rgba(247, 147, 26, 0.12);
-      --accent-glow: 0 0 20px rgba(247, 147, 26, 0.3);
-      --success: #10b981;
-      --success-dim: rgba(16, 185, 129, 0.12);
-      --danger: #ef4444;
-      --warning: #f59e0b;
-      --r: 12px;
-      --rs: 8px;
+      --bg:          #020209;
+      --surface:     #06060f;
+      --surface2:    #0b0b1a;
+      --surface3:    #101025;
+      --border:      #181835;
+      --text:        #c8dcf0;
+      --text2:       #4a6080;
+      --text3:       #222840;
+      --accent:      #00e5ff;
+      --accent-dim:  rgba(0,229,255,.07);
+      --accent-glow: 0 0 18px rgba(0,229,255,.35);
+      --accent2:     #7c3aed;
+      --accent2-dim: rgba(124,58,237,.1);
+      --success:     #00ff88;
+      --success-dim: rgba(0,255,136,.07);
+      --danger:      #ff2255;
+      --warning:     #ffaa00;
+      --r:  10px;
+      --rs: 7px;
+      --mono: 'SF Mono','Cascadia Code','Fira Code','Consolas',monospace;
     }
-
-    /* Telegram WebApp theme overrides — active when opened inside Telegram */
-    .tg-theme {
-      --bg:       var(--tg-theme-bg-color, #080812);
-      --surface:  var(--tg-theme-secondary-bg-color, #0f0f1c);
-      --text:     var(--tg-theme-text-color, #e2e8f0);
-      --text2:    var(--tg-theme-hint-color, #8892a4);
-      --accent:   var(--tg-theme-button-color, #f7931a);
-    }
-
-    /* Tab navigation */
-    .tabs {
-      display: flex;
-      background: var(--surface);
-      border-bottom: 1px solid var(--border);
-      position: sticky; top: 0; z-index: 9;
-    }
-    .tab {
-      flex: 1; padding: 12px 8px;
-      font-size: 13px; font-weight: 600;
-      text-align: center; cursor: pointer;
-      border: none; background: transparent;
-      color: var(--text2);
-      border-bottom: 2px solid transparent;
-      transition: all .2s;
-    }
-    .tab.active { color: var(--accent); border-bottom-color: var(--accent); }
-
-    /* Batch textarea */
-    .textarea {
-      width: 100%;
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: var(--rs);
-      padding: 11px 14px;
-      color: var(--text);
-      font-size: 14px; line-height: 1.6;
-      outline: none; resize: vertical;
-      min-height: 120px;
-      font-family: inherit;
-      transition: border-color .2s, box-shadow .2s;
-    }
-    .textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
-    .textarea::placeholder { color: var(--text3); }
 
     html { scroll-behavior: smooth; }
 
@@ -81,72 +39,169 @@
       color: var(--text);
       min-height: 100vh;
       line-height: 1.6;
+      overflow-x: hidden;
     }
+
+    /* Dot-grid background */
+    body::before {
+      content: '';
+      position: fixed; inset: 0;
+      background-image: radial-gradient(rgba(0,229,255,.12) 1px, transparent 1px);
+      background-size: 32px 32px;
+      pointer-events: none; z-index: 0;
+    }
+
+    /* Subtle horizontal scan sweep */
+    @keyframes scan { 0%{transform:translateY(-100vh)} 100%{transform:translateY(100vh)} }
+    body::after {
+      content: '';
+      position: fixed; left: 0; right: 0; top: 0; height: 120px;
+      background: linear-gradient(180deg, transparent, rgba(0,229,255,.018), transparent);
+      pointer-events: none; z-index: 0;
+      animation: scan 8s linear infinite;
+    }
+
+    header, nav, .container, .toast { position: relative; z-index: 2; }
 
     /* ─── HEADER ─── */
     .header {
-      background: linear-gradient(180deg, #0d0d22 0%, var(--bg) 100%);
+      background: rgba(2,2,9,.94);
+      backdrop-filter: blur(14px);
       border-bottom: 1px solid var(--border);
-      padding: 18px 24px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      position: sticky;
-      top: 0;
-      z-index: 10;
+      padding: 13px 18px;
+      display: flex; align-items: center; justify-content: space-between;
+      position: sticky; top: 0; z-index: 10;
+    }
+    .header::after {
+      content: '';
+      position: absolute; bottom: -1px; left: 0; right: 0; height: 1px;
+      background: linear-gradient(90deg, transparent 0%, var(--accent) 50%, transparent 100%);
+      opacity: .25;
     }
     .header-brand { display: flex; align-items: center; gap: 12px; }
     .header-logo {
-      font-size: 30px;
-      filter: drop-shadow(0 0 10px rgba(247, 147, 26, 0.7));
+      font-size: 28px;
+      animation: glow-logo 3s ease-in-out infinite;
+      display: inline-block;
     }
-    .header-title { font-size: 19px; font-weight: 700; }
-    .header-sub { font-size: 12px; color: var(--text2); }
-    .header-right { display: flex; align-items: center; gap: 10px; }
+    @keyframes glow-logo {
+      0%,100% { filter: drop-shadow(0 0 6px rgba(0,229,255,.5)); }
+      50%      { filter: drop-shadow(0 0 18px rgba(0,229,255,1)) drop-shadow(0 0 40px rgba(0,229,255,.4)); }
+    }
+    .header-title {
+      font-size: 17px; font-weight: 800; letter-spacing: 3px;
+      font-family: var(--mono);
+      color: var(--accent);
+      text-shadow: 0 0 14px rgba(0,229,255,.55);
+    }
+    .header-sub { font-size: 10.5px; color: var(--text2); letter-spacing: .6px; margin-top: 1px; }
+    .header-right { display: flex; align-items: center; gap: 8px; }
     .badge {
       display: inline-flex; align-items: center; gap: 5px;
-      padding: 4px 12px;
-      border-radius: 100px;
-      font-size: 12px; font-weight: 600;
+      padding: 4px 11px; border-radius: 100px;
+      font-size: 11px; font-weight: 600; font-family: var(--mono);
     }
     .badge-idle { background: var(--surface2); color: var(--text2); border: 1px solid var(--border); }
-    .badge-run  { background: var(--accent-dim); color: var(--accent); border: 1px solid rgba(247,147,26,.4); }
-    .pulse { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: blink 1s ease-in-out infinite; }
-    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.3} }
+    .badge-run  { background: rgba(0,229,255,.07); color: var(--accent); border: 1px solid rgba(0,229,255,.3); box-shadow: 0 0 10px rgba(0,229,255,.12); }
+    .pulse { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); box-shadow: 0 0 6px var(--accent); animation: blink 1s ease-in-out infinite; }
+    @keyframes blink { 0%,100%{opacity:1} 50%{opacity:.15} }
 
     /* ─── STATS BAR ─── */
     .stats-bar {
-      display: grid;
-      grid-template-columns: repeat(4, 1fr);
-      gap: 1px;
-      background: var(--border);
+      display: grid; grid-template-columns: repeat(4, 1fr);
+      gap: 1px; background: var(--border);
       border-bottom: 1px solid var(--border);
     }
-    .stat { background: var(--surface); padding: 14px 16px; text-align: center; }
-    .stat-val { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; color: var(--accent); }
-    .stat-lbl { font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: .5px; }
+    .stat { background: var(--surface); padding: 11px 8px; text-align: center; }
+    .stat-val {
+      font-size: 22px; font-weight: 800; font-family: var(--mono);
+      color: var(--accent); font-variant-numeric: tabular-nums;
+      text-shadow: 0 0 10px rgba(0,229,255,.4);
+    }
+    .stat-lbl { font-size: 9px; color: var(--text2); text-transform: uppercase; letter-spacing: .8px; margin-top: 2px; }
+    #sFound { color: var(--success); text-shadow: 0 0 10px rgba(0,255,136,.4) !important; }
+
+    /* ─── TABS ─── */
+    .tabs {
+      display: flex; background: rgba(6,6,15,.97);
+      border-bottom: 1px solid var(--border);
+      position: sticky; top: 56px; z-index: 9;
+    }
+    .tab {
+      flex: 1; padding: 11px 4px;
+      font-size: 10.5px; font-weight: 700; letter-spacing: .6px;
+      text-align: center; cursor: pointer;
+      border: none; background: transparent; color: var(--text2);
+      border-bottom: 2px solid transparent;
+      transition: all .2s; font-family: var(--mono);
+    }
+    .tab.active {
+      color: var(--accent);
+      border-bottom-color: var(--accent);
+      text-shadow: 0 0 10px rgba(0,229,255,.6);
+    }
+    .tab:hover:not(.active) { color: var(--text); }
 
     /* ─── LAYOUT ─── */
     .container {
-      max-width: 860px;
-      margin: 0 auto;
-      padding: 24px 16px;
-      display: flex;
-      flex-direction: column;
-      gap: 18px;
+      max-width: 820px; margin: 0 auto;
+      padding: 18px 12px;
+      display: flex; flex-direction: column; gap: 14px;
     }
+
+    /* ─── CARDS ─── */
     .card {
       background: var(--surface);
       border: 1px solid var(--border);
       border-radius: var(--r);
-      padding: 22px;
+      padding: 20px;
+      position: relative; overflow: hidden;
+    }
+    .card::before {
+      content: '';
+      position: absolute; top: 0; left: 10%; right: 10%; height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(0,229,255,.18), transparent);
     }
     .card-title {
-      font-size: 15px; font-weight: 600;
-      margin-bottom: 16px;
+      font-size: 13px; font-weight: 700; letter-spacing: 1.2px;
+      margin-bottom: 16px; font-family: var(--mono);
+      color: var(--accent);
       display: flex; align-items: center; gap: 8px;
     }
     .hidden { display: none !important; }
+
+    /* ─── QUICK GUIDE (collapsible) ─── */
+    .guide {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: var(--rs);
+      overflow: hidden;
+      margin-bottom: 16px;
+    }
+    .guide summary {
+      padding: 10px 14px;
+      font-size: 12px; font-family: var(--mono);
+      color: var(--text2); cursor: pointer;
+      user-select: none; list-style: none;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .guide summary::-webkit-details-marker { display: none; }
+    .guide summary::before { content: '▶'; color: var(--accent2); font-size: 10px; transition: transform .2s; }
+    .guide[open] summary::before { transform: rotate(90deg); }
+    .guide-body { padding: 0 14px 14px; display: flex; flex-direction: column; gap: 8px; }
+    .guide-step {
+      display: flex; align-items: flex-start; gap: 12px;
+      padding: 10px 12px; background: var(--surface);
+      border: 1px solid var(--border); border-radius: var(--rs);
+    }
+    .guide-num {
+      width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+      background: rgba(0,229,255,.09); border: 1px solid rgba(0,229,255,.25);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 11px; font-weight: 700; color: var(--accent); font-family: var(--mono);
+    }
+    .guide-text { font-size: 12px; color: var(--text2); line-height: 1.7; }
+    .guide-text strong { color: var(--text); }
 
     /* ─── INPUTS ─── */
     .input-row { display: flex; gap: 10px; margin-bottom: 14px; }
@@ -155,114 +210,139 @@
       background: var(--surface2);
       border: 1px solid var(--border);
       border-radius: var(--rs);
-      padding: 11px 14px;
-      color: var(--text);
-      font-size: 15px;
-      outline: none;
+      padding: 12px 16px;
+      color: var(--text); font-size: 15px;
+      outline: none; font-family: var(--mono);
       transition: border-color .2s, box-shadow .2s;
+      letter-spacing: .3px;
     }
     .input-field:focus {
       border-color: var(--accent);
-      box-shadow: 0 0 0 3px var(--accent-dim);
+      box-shadow: 0 0 0 3px var(--accent-dim), 0 0 14px rgba(0,229,255,.08);
     }
-    .input-field::placeholder { color: var(--text3); }
+    .input-field::placeholder { color: var(--text3); font-family: inherit; letter-spacing: 0; }
 
-    .options-row { display: flex; gap: 20px; margin-bottom: 14px; flex-wrap: wrap; }
+    /* ─── MODE / DEPTH TOGGLES ─── */
+    .options-row { display: flex; gap: 16px; margin-bottom: 14px; flex-wrap: wrap; }
     .opt-group { display: flex; flex-direction: column; gap: 5px; }
-    .opt-lbl { font-size: 11px; color: var(--text2); text-transform: uppercase; letter-spacing: .5px; }
+    .opt-lbl { font-size: 10px; color: var(--text2); text-transform: uppercase; letter-spacing: .9px; font-family: var(--mono); }
     .toggle-row {
       display: flex;
       background: var(--surface2);
       border: 1px solid var(--border);
-      border-radius: var(--rs);
-      overflow: hidden;
+      border-radius: var(--rs); overflow: hidden;
     }
     .tbtn {
-      padding: 7px 15px;
-      font-size: 13px;
-      border: none; background: transparent;
-      color: var(--text2);
-      cursor: pointer;
-      transition: all .2s;
-      white-space: nowrap;
+      padding: 8px 18px; font-size: 12px; font-family: var(--mono);
+      border: none; background: transparent; color: var(--text2);
+      cursor: pointer; transition: all .2s; white-space: nowrap;
     }
-    .tbtn.active { background: var(--accent); color: #000; font-weight: 600; }
+    .tbtn.active {
+      background: rgba(0,229,255,.1); color: var(--accent);
+      font-weight: 700;
+    }
+
+    /* mode description strip */
+    .mode-strip {
+      font-size: 11.5px; color: var(--text2); margin-bottom: 14px;
+      padding: 9px 13px;
+      background: rgba(124,58,237,.06);
+      border-left: 2px solid var(--accent2);
+      border-radius: 0 var(--rs) var(--rs) 0;
+      font-family: var(--mono); line-height: 1.6;
+    }
 
     /* ─── BUTTONS ─── */
     .btn {
-      padding: 10px 20px;
-      border-radius: var(--rs);
+      padding: 11px 22px; border-radius: var(--rs);
       border: none; cursor: pointer;
-      font-size: 14px; font-weight: 600;
-      transition: all .2s;
+      font-size: 12.5px; font-weight: 700; letter-spacing: .8px;
+      font-family: var(--mono);
+      transition: all .18s;
       display: inline-flex; align-items: center; gap: 7px;
     }
-    .btn-primary { background: var(--accent); color: #000; }
-    .btn-primary:hover { background: #e08618; box-shadow: var(--accent-glow); transform: translateY(-1px); }
-    .btn-secondary { background: var(--surface2); color: var(--text); border: 1px solid var(--border); }
-    .btn-secondary:hover { border-color: var(--accent); color: var(--accent); }
-    .btn-danger { background: var(--danger); color: #fff; }
-    .btn-danger:hover { background: #dc2626; }
-    .btn:disabled { opacity: .4; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
+    .btn-primary {
+      background: rgba(0,229,255,.09); color: var(--accent);
+      border: 1px solid rgba(0,229,255,.35);
+    }
+    .btn-primary:hover {
+      background: rgba(0,229,255,.16);
+      box-shadow: var(--accent-glow); transform: translateY(-1px);
+    }
+    .btn-secondary {
+      background: var(--surface2); color: var(--text2);
+      border: 1px solid var(--border);
+    }
+    .btn-secondary:hover { border-color: var(--accent2); color: var(--accent2); }
+    .btn-danger {
+      background: rgba(255,34,85,.08); color: var(--danger);
+      border: 1px solid rgba(255,34,85,.3);
+    }
+    .btn-danger:hover { background: rgba(255,34,85,.16); box-shadow: 0 0 12px rgba(255,34,85,.25); }
+    .btn:disabled { opacity: .3; cursor: not-allowed; transform: none !important; box-shadow: none !important; }
     .btn-row { display: flex; gap: 8px; flex-wrap: wrap; }
 
     /* ─── PROGRESS ─── */
-    .prog-wrap { height: 3px; background: var(--border); border-radius: 3px; margin: 12px 0; overflow: hidden; }
-    .prog-bar { height: 100%; background: var(--accent); border-radius: 3px; transition: width .3s; width: 0; }
+    .prog-wrap { height: 2px; background: var(--border); border-radius: 2px; margin: 12px 0; overflow: hidden; }
+    .prog-bar {
+      height: 100%; border-radius: 2px;
+      background: linear-gradient(90deg, var(--accent2), var(--accent));
+      transition: width .3s; width: 0;
+      box-shadow: 0 0 8px rgba(0,229,255,.6);
+    }
     .prog-bar.ind { animation: ind 1.5s ease-in-out infinite; width: 30%; }
     @keyframes ind { 0%{transform:translateX(-200%)} 100%{transform:translateX(500%)} }
 
-    /* ─── FEED ─── */
+    /* ─── TERMINAL FEED ─── */
     .feed {
-      background: var(--surface2);
+      background: #01010a;
       border: 1px solid var(--border);
       border-radius: var(--rs);
-      height: 280px;
-      overflow-y: auto;
-      padding: 10px;
-      font-family: 'SF Mono', 'Fira Code', 'Cascadia Code', monospace;
-      font-size: 12.5px;
+      height: 260px; overflow-y: auto;
+      padding: 10px 12px;
+      font-family: var(--mono); font-size: 12px;
       scroll-behavior: smooth;
     }
     .feed-entry {
-      padding: 3px 7px;
-      border-radius: 4px;
-      margin-bottom: 2px;
-      display: flex; align-items: baseline; gap: 7px;
+      padding: 2px 4px; border-radius: 3px; margin-bottom: 1px;
+      display: flex; align-items: baseline; gap: 8px; line-height: 1.55;
     }
-    .fe-ts { color: var(--text3); font-size: 10.5px; min-width: 48px; flex-shrink: 0; }
+    .fe-ts      { color: var(--text3); font-size: 10px; min-width: 54px; flex-shrink: 0; }
     .fe-info    { color: var(--text2); }
-    .fe-checking{ color: var(--text); }
+    .fe-checking{ color: rgba(0,229,255,.55); }
     .fe-empty   { color: var(--text3); }
-    .fe-used    { color: var(--warning); }
-    .fe-found   { background: var(--success-dim); color: var(--success); font-weight: 600; border: 1px solid rgba(16,185,129,.25); }
-    .fe-error   { color: var(--danger); }
-    .fe-jackpot {
-      background: linear-gradient(90deg, rgba(247,147,26,.18), rgba(255,100,0,.18));
-      color: var(--accent); font-weight: 700;
-      border: 1px solid rgba(247,147,26,.4);
-      animation: jackpot 1s ease-in-out infinite;
+    .fe-used    { color: rgba(255,170,0,.65); }
+    .fe-found   {
+      background: var(--success-dim); color: var(--success); font-weight: 600;
+      border: 1px solid rgba(0,255,136,.18); text-shadow: 0 0 6px rgba(0,255,136,.5);
     }
-    @keyframes jackpot { 0%,100%{opacity:1} 50%{opacity:.65} }
+    .fe-error  { color: var(--danger); }
+    .fe-jackpot {
+      background: linear-gradient(90deg, rgba(0,229,255,.07), rgba(124,58,237,.07));
+      color: var(--accent); font-weight: 700;
+      border: 1px solid rgba(0,229,255,.25);
+      animation: jackpot .9s ease-in-out infinite;
+      text-shadow: 0 0 8px var(--accent);
+    }
+    @keyframes jackpot { 0%,100%{opacity:1} 50%{opacity:.55} }
 
     /* ─── RESULTS ─── */
     .result-item {
       background: var(--surface2);
-      border: 1px solid var(--success);
-      border-radius: var(--rs);
-      padding: 16px;
-      margin-bottom: 12px;
-      position: relative;
+      border: 1px solid rgba(0,255,136,.35);
+      border-radius: var(--rs); padding: 18px; margin-bottom: 12px;
+      box-shadow: 0 0 24px rgba(0,255,136,.05);
     }
-    .result-bal { font-size: 22px; font-weight: 700; color: var(--success); margin-bottom: 10px; }
-    .result-field {
-      display: flex; align-items: center; gap: 8px;
-      margin-bottom: 5px; font-size: 13px;
+    .result-bal {
+      font-size: 26px; font-weight: 800; color: var(--success);
+      margin-bottom: 12px; font-family: var(--mono);
+      text-shadow: 0 0 12px rgba(0,255,136,.55);
     }
-    .rf-lbl { color: var(--text2); min-width: 68px; flex-shrink: 0; }
-    .rf-val { color: var(--text); font-family: monospace; font-size: 12px; word-break: break-all; flex: 1; }
+    .result-field { display: flex; align-items: center; gap: 8px; margin-bottom: 6px; font-size: 12px; }
+    .rf-lbl { color: var(--text2); min-width: 72px; flex-shrink: 0; font-family: var(--mono); font-size: 10.5px; text-transform: uppercase; letter-spacing: .6px; }
+    .rf-val { color: var(--text); font-family: var(--mono); font-size: 11.5px; word-break: break-all; flex: 1; }
     .copy-btn {
-      padding: 3px 8px; font-size: 11px;
+      padding: 3px 8px; font-size: 10px; font-family: var(--mono);
       background: var(--surface3); border: 1px solid var(--border);
       border-radius: 4px; color: var(--text2);
       cursor: pointer; transition: all .2s; white-space: nowrap; flex-shrink: 0;
@@ -271,90 +351,153 @@
     .expl-link { font-size: 11px; color: var(--accent); text-decoration: none; flex-shrink: 0; }
     .expl-link:hover { text-decoration: underline; }
 
-    /* ─── HUNT ─── */
-    .hunt-desc { color: var(--text2); font-size: 13.5px; margin-bottom: 14px; line-height: 1.7; }
+    /* ─── BATCH TEXTAREA ─── */
+    .textarea {
+      width: 100%;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: var(--rs); padding: 11px 14px;
+      color: var(--text); font-size: 13px; line-height: 1.7;
+      outline: none; resize: vertical; min-height: 110px;
+      font-family: var(--mono);
+      transition: border-color .2s, box-shadow .2s;
+    }
+    .textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px var(--accent-dim); }
+    .textarea::placeholder { color: var(--text3); font-family: inherit; }
+
+    /* ─── HUNT TAB ─── */
+    .hunt-intro {
+      color: var(--text2); font-size: 13px; margin-bottom: 16px;
+      line-height: 1.8; font-family: var(--mono);
+    }
     .odds-pill {
-      display: inline-block;
-      background: var(--accent-dim);
-      border: 1px solid rgba(247,147,26,.25);
-      border-radius: var(--rs);
-      padding: 7px 14px;
-      font-size: 13px; color: var(--accent);
-      margin-bottom: 16px;
+      display: inline-flex; align-items: center; gap: 8px;
+      background: rgba(124,58,237,.08); border: 1px solid rgba(124,58,237,.25);
+      border-radius: var(--rs); padding: 8px 16px;
+      font-size: 12px; color: var(--accent2); font-family: var(--mono);
+      margin-bottom: 18px;
     }
 
-    /* ─── WARNING BOX ─── */
+    /* ─── WARN / INFO BOXES ─── */
     .warn-box {
-      background: rgba(245,158,11,.08);
-      border: 1px solid rgba(245,158,11,.25);
-      border-radius: var(--rs);
-      padding: 10px 14px;
-      font-size: 12.5px; color: var(--warning);
-      margin-bottom: 14px;
+      background: rgba(255,170,0,.05); border: 1px solid rgba(255,170,0,.18);
+      border-radius: var(--rs); padding: 10px 14px;
+      font-size: 12px; color: rgba(255,170,0,.85); margin-bottom: 16px; line-height: 1.6;
     }
-
-    /* ─── HINT ─── */
-    .hint { font-size: 12px; color: var(--text2); margin-bottom: 14px; }
+    .info-box {
+      background: rgba(0,229,255,.04); border: 1px solid rgba(0,229,255,.14);
+      border-radius: var(--rs); padding: 10px 14px;
+      font-size: 12px; color: var(--text2); margin-bottom: 14px; line-height: 1.7;
+    }
+    .info-box strong { color: var(--accent); }
+    .hint { font-size: 12.5px; color: var(--text2); margin-bottom: 14px; line-height: 1.7; }
 
     /* ─── TOAST ─── */
     .toast {
-      position: fixed; bottom: 24px; right: 24px;
-      background: var(--surface2);
-      border: 1px solid var(--border);
-      border-radius: var(--rs);
-      padding: 11px 18px; font-size: 14px;
-      z-index: 1000;
-      transform: translateY(80px); opacity: 0;
-      transition: all .25s;
-      pointer-events: none;
+      position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%) translateY(80px);
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: var(--rs); padding: 10px 20px; font-size: 13px;
+      font-family: var(--mono); z-index: 1000; opacity: 0;
+      transition: all .25s; pointer-events: none;
+      white-space: nowrap; max-width: 90vw;
     }
-    .toast.show { transform: translateY(0); opacity: 1; }
+    .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
 
     /* ─── MEMORY GUIDE ─── */
-    .step-dots { display: flex; gap: 6px; margin-bottom: 18px; }
-    .step-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--border); transition: background .2s; }
-    .step-dot.active { background: var(--accent); }
+    .step-dots { display: flex; gap: 8px; margin-bottom: 20px; }
+    .step-dot {
+      width: 28px; height: 4px; border-radius: 2px;
+      background: var(--border); transition: all .25s;
+    }
+    .step-dot.active { background: var(--accent); box-shadow: 0 0 8px var(--accent); }
     .step-dot.done   { background: var(--success); }
-    .mem-step-title { font-size: 12px; color: var(--text2); margin-bottom: 10px; text-transform: uppercase; letter-spacing: .5px; }
+    .mem-step-title {
+      font-size: 11px; color: var(--text2); margin-bottom: 12px;
+      text-transform: uppercase; letter-spacing: 1px; font-family: var(--mono);
+    }
     .mem-grid { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
-    .mem-btn { padding: 8px 14px; border-radius: var(--rs); border: 1px solid var(--border); background: var(--surface2); color: var(--text2); cursor: pointer; font-size: 13px; transition: all .2s; }
-    .mem-btn:hover  { border-color: var(--accent); color: var(--accent); }
-    .mem-btn.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); font-weight: 600; }
-    .mem-word-cloud { display: flex; flex-wrap: wrap; gap: 6px; max-height: 140px; overflow-y: auto; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--rs); padding: 10px; }
-    .mem-word-tag { padding: 3px 9px; background: var(--surface3); border: 1px solid var(--border); border-radius: 20px; font-size: 12px; color: var(--text2); }
+    .mem-btn {
+      padding: 9px 15px; border-radius: var(--rs);
+      border: 1px solid var(--border); background: var(--surface2);
+      color: var(--text2); cursor: pointer; font-size: 12px;
+      transition: all .2s; font-family: var(--mono);
+    }
+    .mem-btn:hover  { border-color: rgba(0,229,255,.4); color: var(--text); }
+    .mem-btn.active { background: var(--accent-dim); border-color: var(--accent); color: var(--accent); font-weight: 700; }
+    .mem-word-cloud {
+      display: flex; flex-wrap: wrap; gap: 6px;
+      max-height: 130px; overflow-y: auto;
+      background: #01010a; border: 1px solid var(--border);
+      border-radius: var(--rs); padding: 10px;
+    }
+    .mem-word-tag {
+      padding: 3px 10px; background: var(--surface3);
+      border: 1px solid var(--border); border-radius: 20px;
+      font-size: 11px; color: var(--text2); font-family: var(--mono);
+    }
 
     /* ─── FEELING LUCKY ─── */
-    .lucky-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 8px; margin: 12px 0; }
-    .lucky-word { padding: 8px 12px; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--rs); font-size: 13px; color: var(--text2); text-align: center; animation: fadeIn .3s ease; }
-    .lucky-word.checking { border-color: var(--accent); color: var(--accent); }
-    .lucky-word.empty    { opacity: .4; }
+    .lucky-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(125px, 1fr)); gap: 8px; margin: 12px 0; }
+    .lucky-word {
+      padding: 9px 10px; background: var(--surface2);
+      border: 1px solid var(--border); border-radius: var(--rs);
+      font-size: 12px; color: var(--text2); text-align: center;
+      animation: fadeIn .25s ease; font-family: var(--mono);
+    }
+    .lucky-word.checking { border-color: var(--accent); color: var(--accent); box-shadow: inset 0 0 8px var(--accent-dim); }
+    .lucky-word.empty    { opacity: .28; }
     .lucky-word.used     { border-color: var(--warning); color: var(--warning); }
-    .lucky-word.found    { background: var(--success-dim); border-color: var(--success); color: var(--success); font-weight: 700; }
-    @keyframes fadeIn { from{opacity:0;transform:translateY(4px)} to{opacity:1;transform:none} }
+    .lucky-word.found    { background: var(--success-dim); border-color: var(--success); color: var(--success); font-weight: 700; box-shadow: 0 0 14px rgba(0,255,136,.18); }
+    @keyframes fadeIn { from{opacity:0;transform:translateY(6px)} to{opacity:1;transform:none} }
 
     /* ─── AI SUGGEST ─── */
-    .api-row { display: flex; gap: 8px; margin-bottom: 12px; align-items: flex-start; }
-    .api-key-input { flex: 1; font-family: monospace; font-size: 13px; }
-    .provider-badge { font-size: 11px; color: var(--text2); padding: 4px 8px; background: var(--surface2); border: 1px solid var(--border); border-radius: 6px; white-space: nowrap; flex-shrink: 0; margin-top: 10px; }
-    .ai-word-cloud { display: flex; flex-wrap: wrap; gap: 6px; max-height: 160px; overflow-y: auto; background: var(--surface2); border: 1px solid var(--border); border-radius: var(--rs); padding: 10px; }
-    .ai-word-tag { padding: 3px 9px; background: var(--accent-dim); border: 1px solid rgba(247,147,26,.3); border-radius: 20px; font-size: 12px; color: var(--accent); }
+    .api-row { display: flex; gap: 8px; margin-bottom: 14px; align-items: flex-start; }
+    .api-key-input { flex: 1; font-family: var(--mono); font-size: 13px; }
+    .provider-badge {
+      font-size: 10.5px; color: var(--text2); padding: 4px 10px;
+      background: var(--surface2); border: 1px solid var(--border);
+      border-radius: 6px; white-space: nowrap; flex-shrink: 0;
+      margin-top: 11px; font-family: var(--mono);
+    }
+    .ai-word-cloud {
+      display: flex; flex-wrap: wrap; gap: 6px;
+      max-height: 150px; overflow-y: auto;
+      background: #01010a; border: 1px solid var(--border);
+      border-radius: var(--rs); padding: 10px;
+    }
+    .ai-word-tag {
+      padding: 3px 10px;
+      background: rgba(124,58,237,.07); border: 1px solid rgba(124,58,237,.22);
+      border-radius: 20px; font-size: 11px; color: rgba(167,139,250,.9); font-family: var(--mono);
+    }
+
+    /* ─── SECTION LABEL ─── */
+    .section-lbl {
+      font-size: 10px; font-family: var(--mono); letter-spacing: 1.2px;
+      text-transform: uppercase; color: var(--text3); margin-bottom: 8px;
+    }
 
     /* ─── RESPONSIVE ─── */
     @media (max-width: 580px) {
       .stats-bar { grid-template-columns: repeat(2, 1fr); }
-      .header { flex-direction: column; gap: 10px; align-items: flex-start; }
-      .input-row { flex-direction: column; }
+      .header { padding: 11px 13px; }
+      .header-title { font-size: 14px; letter-spacing: 2px; }
+      .container { padding: 12px 10px; }
+      .card { padding: 15px; }
+      .btn { padding: 10px 15px; font-size: 12px; }
+      .input-field { font-size: 14px; }
+      .stat-val { font-size: 19px; }
     }
   </style>
 </head>
 <body>
 
+<!-- ─── HEADER ─── -->
 <header class="header">
   <div class="header-brand">
     <span class="header-logo">₿</span>
     <div>
-      <div class="header-title">BTC Seed Recovery Checker</div>
-      <div class="header-sub">Brain wallet &amp; BIP39 balance checker — runs entirely in your browser</div>
+      <div class="header-title">QBTC SCANNER</div>
+      <div class="header-sub">Brain wallet &amp; BIP39 recovery — runs in your browser</div>
     </div>
   </div>
   <div class="header-right">
@@ -362,117 +505,147 @@
   </div>
 </header>
 
+<!-- ─── STATS BAR ─── -->
 <div class="stats-bar">
   <div class="stat">
     <div class="stat-val" id="sWords">0</div>
-    <div class="stat-lbl">Words Checked</div>
+    <div class="stat-lbl">Checked</div>
   </div>
   <div class="stat">
     <div class="stat-val" id="sVars">0</div>
-    <div class="stat-lbl">Variations Tried</div>
+    <div class="stat-lbl">Variations</div>
   </div>
   <div class="stat">
     <div class="stat-val" id="sAddrs">0</div>
-    <div class="stat-lbl">Addresses Queried</div>
+    <div class="stat-lbl">Addresses</div>
   </div>
-  <div class="stat" style="--accent:var(--success)">
-    <div class="stat-val" id="sFound" style="color:var(--success)">0</div>
-    <div class="stat-lbl">Wallets Found</div>
+  <div class="stat">
+    <div class="stat-val" id="sFound">0</div>
+    <div class="stat-lbl">Found</div>
   </div>
 </div>
 
 <!-- ─── TABS ─── -->
 <nav class="tabs" id="tabBar">
-  <button class="tab active" onclick="switchTab('single')" style="font-size:12px">🔍 Single</button>
-  <button class="tab" onclick="switchTab('batch')"  style="font-size:12px">📋 Batch</button>
-  <button class="tab" onclick="switchTab('hunt')"   style="font-size:12px">🎰 Hunt</button>
-  <button class="tab" onclick="switchTab('memory')" style="font-size:12px">🧠 Memory</button>
-  <button class="tab" onclick="switchTab('ai')"     style="font-size:12px">🤖 AI</button>
+  <button class="tab active" onclick="switchTab('single')">🔍 Single</button>
+  <button class="tab" onclick="switchTab('batch')">📋 Batch</button>
+  <button class="tab" onclick="switchTab('hunt')">🎲 Hunt</button>
+  <button class="tab" onclick="switchTab('memory')">🧠 Memory</button>
+  <button class="tab" onclick="switchTab('ai')">🤖 AI</button>
 </nav>
 
 <div class="container">
 
-  <!-- ─── SINGLE CHECK PANEL ─── -->
+  <!-- ══════════════════════════════════════════
+       SINGLE CHECK PANEL
+  ══════════════════════════════════════════ -->
   <div class="tab-panel" id="panelSingle">
-  <div class="card">
-    <div class="card-title">🔍 Check a Word or Phrase</div>
 
-    <div class="warn-box">
-      ⚠️ This tool checks Bitcoin addresses derived from your passphrase for existing balances.
-      All computation happens locally in your browser — nothing is sent to any server.
-    </div>
-
-    <div class="input-row">
-      <input id="wordInput" type="text" class="input-field"
-        placeholder="Enter word, phrase or passphrase…"
-        autocomplete="off" autocorrect="off" spellcheck="false">
-    </div>
-
-    <div class="options-row">
-      <div class="opt-group">
-        <div class="opt-lbl">Derivation Mode</div>
-        <div class="toggle-row">
-          <button class="tbtn active" id="modeBW" onclick="setMode('brainwallet')">Brain Wallet</button>
-          <button class="tbtn" id="modeBIP" onclick="setMode('bip39')">BIP39 Seed</button>
+    <!-- Quick guide for new users -->
+    <details class="guide">
+      <summary>Quick Guide — how to use this tool</summary>
+      <div class="guide-body">
+        <div class="guide-step">
+          <div class="guide-num">1</div>
+          <div class="guide-text"><strong>Enter a word or phrase</strong> you think you used as a password when creating a Bitcoin wallet (e.g. "dragon", "my secret", "satoshi2011")</div>
+        </div>
+        <div class="guide-step">
+          <div class="guide-num">2</div>
+          <div class="guide-text"><strong>Choose Brain Wallet</strong> for a single word/phrase, or <strong>BIP39 Seed</strong> if you had a 12/24-word recovery phrase. Start with Brain Wallet — it's faster.</div>
+        </div>
+        <div class="guide-step">
+          <div class="guide-num">3</div>
+          <div class="guide-text"><strong>Click Check Word</strong> — the scanner will test the word and dozens of variations (with numbers, capitals, symbols) against the Bitcoin blockchain.</div>
+        </div>
+        <div class="guide-step">
+          <div class="guide-num">4</div>
+          <div class="guide-text">If a wallet is found with balance, it appears in the <strong>Found Wallets</strong> section below with the private key. Save it immediately.</div>
         </div>
       </div>
-      <div class="opt-group">
-        <div class="opt-lbl">Search Depth</div>
-        <div class="toggle-row">
-          <button class="tbtn active" id="depthN" onclick="setDepth('normal')">Normal</button>
-          <button class="tbtn" id="depthD" onclick="setDepth('deep')">Deep</button>
+    </details>
+
+    <div class="card">
+      <div class="card-title">// CHECK A WORD OR PHRASE</div>
+
+      <div class="warn-box">
+        ⚠️ All computation happens locally in your browser — nothing is sent to any server except public blockchain APIs to check balances.
+      </div>
+
+      <div class="section-lbl">Your passphrase</div>
+      <div class="input-row">
+        <input id="wordInput" type="text" class="input-field"
+          placeholder="Type a word, phrase, or passphrase…"
+          autocomplete="off" autocorrect="off" spellcheck="false">
+      </div>
+
+      <div class="options-row">
+        <div class="opt-group">
+          <div class="opt-lbl">Derivation Mode</div>
+          <div class="toggle-row">
+            <button class="tbtn active" id="modeBW"  onclick="setMode('brainwallet')">Brain Wallet</button>
+            <button class="tbtn"        id="modeBIP" onclick="setMode('bip39')">BIP39 Seed</button>
+          </div>
         </div>
+        <div class="opt-group">
+          <div class="opt-lbl">Search Depth</div>
+          <div class="toggle-row">
+            <button class="tbtn active" id="depthN" onclick="setDepth('normal')">Normal (~30 vars)</button>
+            <button class="tbtn"        id="depthD" onclick="setDepth('deep')">Deep (~80 vars)</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="mode-strip" id="modeHint">
+        Brain Wallet: SHA256(passphrase) → private key · checks Legacy, P2SH-SegWit &amp; Native SegWit addresses
+      </div>
+
+      <div class="btn-row">
+        <button class="btn btn-primary" id="btnCheck" onclick="startCheck()">▶ CHECK WORD</button>
+        <button class="btn btn-danger hidden" id="btnStop" onclick="stopCheck()">■ STOP</button>
+      </div>
+
+      <div class="prog-wrap hidden" id="progWrap">
+        <div class="prog-bar" id="progBar"></div>
       </div>
     </div>
 
-    <div class="hint" id="modeHint">
-      Brain wallet: SHA256(passphrase) → private key · checks Legacy, SegWit &amp; Native SegWit addresses
+    <!-- Live feed -->
+    <div class="card hidden" id="feedCard">
+      <div class="card-title" style="justify-content:space-between">
+        <span>// LIVE OUTPUT</span>
+        <button onclick="clearFeed()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:11px;font-family:var(--mono)">[ CLEAR ]</button>
+      </div>
+      <div class="feed" id="feed"></div>
     </div>
 
-    <div class="btn-row">
-      <button class="btn btn-primary" id="btnCheck" onclick="startCheck()">🔍 Check Word</button>
-      <button class="btn btn-danger hidden" id="btnStop" onclick="stopCheck()">⏹ Stop</button>
+    <!-- Results (shared across tabs) -->
+    <div class="card hidden" id="resultsCard">
+      <div class="card-title">
+        // FOUND WALLETS
+        <span class="badge badge-run" id="foundBadge">0</span>
+      </div>
+      <div id="resultsList"></div>
     </div>
-
-    <div class="prog-wrap hidden" id="progWrap">
-      <div class="prog-bar" id="progBar"></div>
-    </div>
-  </div>
-
-  <!-- ─── LIVE FEED ─── -->
-  <div class="card hidden" id="feedCard">
-    <div class="card-title" style="justify-content:space-between">
-      <span>📡 Live Feed</span>
-      <button onclick="clearFeed()" style="background:none;border:none;color:var(--text3);cursor:pointer;font-size:12px;">Clear</button>
-    </div>
-    <div class="feed" id="feed"></div>
-  </div>
-
-  <!-- ─── RESULTS (shared across tabs) ─── -->
-  <div class="card hidden" id="resultsCard">
-    <div class="card-title">
-      🏆 Found Wallets
-      <span class="badge badge-run" id="foundBadge">0</span>
-    </div>
-    <div id="resultsList"></div>
-  </div>
 
   </div><!-- /panelSingle -->
 
 
-  <!-- ─── BATCH CHECK PANEL ─── -->
+  <!-- ══════════════════════════════════════════
+       BATCH CHECK PANEL
+  ══════════════════════════════════════════ -->
   <div class="tab-panel hidden" id="panelBatch">
 
     <div class="card">
-      <div class="card-title">📋 Batch Check</div>
-      <div class="warn-box">
-        Paste a list of words/phrases — one per line. Each will be checked with all variations.
-        Runs entirely in your browser using your IP address.
+      <div class="card-title">// BATCH CHECK</div>
+      <div class="info-box">
+        Paste a list of words or phrases — <strong>one per line</strong>. Each will be checked with all variations automatically.
+        Ideal for word lists generated by Memory Guide or AI Suggest.
       </div>
 
+      <div class="section-lbl">Words to check (one per line)</div>
       <div style="margin-bottom:14px">
         <textarea id="batchInput" class="textarea"
-          placeholder="Enter words, one per line:&#10;satoshi&#10;nakamoto&#10;bitcoin&#10;password123&#10;..."></textarea>
+          placeholder="satoshi&#10;nakamoto&#10;bitcoin&#10;password123&#10;dragon2013&#10;…"></textarea>
       </div>
 
       <div class="options-row">
@@ -493,8 +666,8 @@
       </div>
 
       <div class="btn-row">
-        <button class="btn btn-primary" id="btnBatchCheck" onclick="startBatch()">🔍 Check All Words</button>
-        <button class="btn btn-danger hidden" id="btnBatchStop" onclick="stopBatch()">⏹ Stop</button>
+        <button class="btn btn-primary" id="btnBatchCheck" onclick="startBatch()">▶ CHECK ALL WORDS</button>
+        <button class="btn btn-danger hidden" id="btnBatchStop" onclick="stopBatch()">■ STOP</button>
       </div>
 
       <div class="prog-wrap hidden" id="batchProgWrap">
@@ -504,33 +677,38 @@
 
     <div class="card hidden" id="batchFeedCard">
       <div class="card-title" style="justify-content:space-between">
-        <span>📡 Batch Feed</span>
-        <span id="batchProgress" style="font-size:12px;color:var(--text2)"></span>
+        <span>// BATCH OUTPUT</span>
+        <span id="batchProgress" style="font-size:11px;color:var(--text2);font-family:var(--mono)"></span>
       </div>
       <div class="feed" id="batchFeed"></div>
     </div>
 
   </div><!-- /panelBatch -->
 
-  <!-- ─── RANDOM KEY HUNT PANEL ─── -->
+
+  <!-- ══════════════════════════════════════════
+       RANDOM KEY HUNT PANEL
+  ══════════════════════════════════════════ -->
   <div class="tab-panel hidden" id="panelHunt">
 
     <div class="card">
-      <div class="card-title">🎰 Random Key Hunt</div>
-      <p class="hunt-desc">
-        Randomly generate Bitcoin private keys and check their balances.
-        Each key has a 1 in 2<sup>256</sup> chance of holding funds — but someone has to find it!
-        Uses your browser's cryptographically secure RNG (<code>crypto.getRandomValues</code>).
-      </p>
+      <div class="card-title">// RANDOM KEY HUNT</div>
+
+      <div class="hunt-intro">
+        Generate random Bitcoin private keys and check their balances. Pure probability —
+        someone out there has to be the one to find it. Uses your browser's cryptographically
+        secure random number generator (<code style="color:var(--accent)">crypto.getRandomValues</code>).
+      </div>
+
       <div class="odds-pill">
-        🎲 Probability per key: ~1 in 115 quattuorvigintillion — pure lottery odds
+        ⚡ Probability per key: ~1 in 10<sup>77</sup> — for entertainment only
       </div>
 
       <div class="btn-row" style="margin-bottom:14px">
-        <button class="btn btn-secondary" id="bH10"   onclick="startHunt(10)">Hunt 10</button>
-        <button class="btn btn-secondary" id="bH100"  onclick="startHunt(100)">Hunt 100</button>
-        <button class="btn btn-secondary" id="bH1000" onclick="startHunt(1000)">Hunt 1 000</button>
-        <button class="btn btn-danger hidden" id="bHStop" onclick="stopHunt()">⏹ Stop</button>
+        <button class="btn btn-secondary" id="bH10"   onclick="startHunt(10)">Hunt × 10</button>
+        <button class="btn btn-secondary" id="bH100"  onclick="startHunt(100)">Hunt × 100</button>
+        <button class="btn btn-secondary" id="bH1000" onclick="startHunt(1000)">Hunt × 1000</button>
+        <button class="btn btn-danger hidden" id="bHStop" onclick="stopHunt()">■ STOP</button>
       </div>
 
       <div class="feed" id="huntFeed" style="height:240px"></div>
@@ -539,14 +717,16 @@
   </div><!-- /panelHunt -->
 
 
-  <!-- ─── MEMORY GUIDE PANEL ─── -->
+  <!-- ══════════════════════════════════════════
+       MEMORY GUIDE PANEL
+  ══════════════════════════════════════════ -->
   <div class="tab-panel hidden" id="panelMemory">
 
     <div class="card">
-      <div class="card-title">🧠 Memory Guide</div>
-      <p class="hint">Answer a few questions to build a personalized word list based on your memories of the wallet.</p>
+      <div class="card-title">// MEMORY GUIDE</div>
+      <p class="hint">Answer a few questions to build a personalized word list based on your memories. No typing required for most steps.</p>
 
-      <!-- Wizard progress dots -->
+      <!-- Wizard progress bars -->
       <div class="step-dots">
         <div class="step-dot active"></div>
         <div class="step-dot"></div>
@@ -556,7 +736,7 @@
 
       <!-- Step 0: Year -->
       <div id="memStep0">
-        <div class="mem-step-title">When did you create this wallet?</div>
+        <div class="mem-step-title">Step 1 of 4 — When did you create this wallet?</div>
         <div class="mem-grid">
           <button class="mem-btn" data-mem="year" data-val="2009" onclick="memAnswer('year','2009')">2009</button>
           <button class="mem-btn" data-mem="year" data-val="2010" onclick="memAnswer('year','2010')">2010</button>
@@ -577,42 +757,45 @@
 
       <!-- Step 1: Topic -->
       <div id="memStep1" class="hidden">
-        <div class="mem-step-title">What were your main interests at the time?</div>
+        <div class="mem-step-title">Step 2 of 4 — What were your main interests at the time?</div>
         <div class="mem-grid">
           <button class="mem-btn" data-mem="topic" data-val="gaming"   onclick="memAnswer('topic','gaming')">🎮 Gaming</button>
           <button class="mem-btn" data-mem="topic" data-val="movies"   onclick="memAnswer('topic','movies')">🎬 Movies</button>
           <button class="mem-btn" data-mem="topic" data-val="sports"   onclick="memAnswer('topic','sports')">⚽ Sports</button>
           <button class="mem-btn" data-mem="topic" data-val="music"    onclick="memAnswer('topic','music')">🎵 Music</button>
           <button class="mem-btn" data-mem="topic" data-val="crypto"   onclick="memAnswer('topic','crypto')">₿ Crypto</button>
-          <button class="mem-btn" data-mem="topic" data-val="nature"   onclick="memAnswer('topic','nature')">🐉 Nature/Fantasy</button>
+          <button class="mem-btn" data-mem="topic" data-val="nature"   onclick="memAnswer('topic','nature')">🐉 Nature / Fantasy</button>
           <button class="mem-btn" data-mem="topic" data-val="personal" onclick="memAnswer('topic','personal')">❤️ Personal</button>
-          <button class="mem-btn" data-mem="topic" data-val="work"     onclick="memAnswer('topic','work')">💼 Work/Tech</button>
+          <button class="mem-btn" data-mem="topic" data-val="work"     onclick="memAnswer('topic','work')">💼 Work / Tech</button>
         </div>
       </div>
 
       <!-- Step 2: Platform -->
       <div id="memStep2" class="hidden">
-        <div class="mem-step-title">What device or platform were you using?</div>
+        <div class="mem-step-title">Step 3 of 4 — What device or platform were you using?</div>
         <div class="mem-grid">
           <button class="mem-btn" data-mem="platform" data-val="windows" onclick="memAnswer('platform','windows')">🖥 Windows PC</button>
           <button class="mem-btn" data-mem="platform" data-val="mac"     onclick="memAnswer('platform','mac')">🍎 Mac</button>
           <button class="mem-btn" data-mem="platform" data-val="mobile"  onclick="memAnswer('platform','mobile')">📱 Mobile</button>
           <button class="mem-btn" data-mem="platform" data-val="linux"   onclick="memAnswer('platform','linux')">🐧 Linux</button>
-          <button class="mem-btn" data-mem="platform" data-val="web"     onclick="memAnswer('platform','web')">🌐 Web/Online</button>
-          <button class="mem-btn" data-mem="platform" data-val="any"     onclick="memAnswer('platform','any')">🤷 Not Sure</button>
+          <button class="mem-btn" data-mem="platform" data-val="web"     onclick="memAnswer('platform','web')">🌐 Web / Online tool</button>
+          <button class="mem-btn" data-mem="platform" data-val="any"     onclick="memAnswer('platform','any')">🤷 Not sure</button>
         </div>
       </div>
 
-      <!-- Step 3: Hint words -->
+      <!-- Step 3: Hints -->
       <div id="memStep3" class="hidden">
-        <div class="mem-step-title">Any words you remember? (optional — separate with spaces)</div>
+        <div class="mem-step-title">Step 4 of 4 — Any hint words you remember? (optional)</div>
+        <div class="info-box" style="margin-bottom:12px">
+          Type any words you associate with the passphrase — your pet's name, a favourite character, a place. Separate with spaces.
+        </div>
         <div class="input-row" style="margin-bottom:12px">
           <input id="memHintInput" type="text" class="input-field"
-            placeholder="e.g. dragon fire 2013 lucky"
+            placeholder="e.g.  dragon  fire  lucky  2013"
             oninput="memAnswers.hint = this.value">
         </div>
         <div class="btn-row">
-          <button class="btn btn-primary" onclick="updateMemWordCloud()">🧠 Generate Word List</button>
+          <button class="btn btn-primary" onclick="updateMemWordCloud()">▶ GENERATE WORD LIST</button>
           <button class="btn btn-secondary" onclick="resetMemWizard()">↺ Start Over</button>
         </div>
       </div>
@@ -621,8 +804,8 @@
     <!-- Generated word list -->
     <div class="card hidden" id="memResultsSection">
       <div class="card-title" style="justify-content:space-between">
-        <span>📝 Generated Words</span>
-        <span id="memWordCount" style="font-size:12px;color:var(--text2)">0 words</span>
+        <span>// GENERATED WORDS</span>
+        <span id="memWordCount" style="font-size:11px;color:var(--text2);font-family:var(--mono)">0 words</span>
       </div>
       <div class="mem-word-cloud" id="memWordCloud"></div>
       <div class="btn-row" style="margin-top:14px">
@@ -633,13 +816,13 @@
 
     <!-- Feeling Lucky -->
     <div class="card" id="luckySection">
-      <div class="card-title">🍀 Feeling Lucky</div>
-      <p class="hint" style="margin-bottom:12px">
-        Instantly check the most common brain wallet passphrases — one click, no setup needed.
-        Your generated words are included if available.
+      <div class="card-title">// FEELING LUCKY</div>
+      <p class="hint">
+        Instantly check the most common brain wallet passphrases with one click — no setup needed.
+        If you generated a word list above, those words are included automatically.
       </p>
       <div class="btn-row" style="margin-bottom:12px">
-        <button class="btn btn-primary" id="btnLucky" onclick="feelingLucky()">🍀 Try My Luck</button>
+        <button class="btn btn-primary" id="btnLucky" onclick="feelingLucky()">🍀 TRY MY LUCK</button>
       </div>
       <div class="lucky-grid" id="luckyGrid"></div>
     </div>
@@ -647,42 +830,45 @@
   </div><!-- /panelMemory -->
 
 
-  <!-- ─── AI SUGGEST PANEL ─── -->
+  <!-- ══════════════════════════════════════════
+       AI SUGGEST PANEL
+  ══════════════════════════════════════════ -->
   <div class="tab-panel hidden" id="panelAi">
 
     <div class="card">
-      <div class="card-title">🤖 AI Word Suggest</div>
-      <p class="hint">Let AI generate personalized passphrase candidates based on your context.</p>
+      <div class="card-title">// AI WORD SUGGEST</div>
+      <p class="hint">Describe your context and let AI generate personalised passphrase candidates. Works best when you provide details about your interests, year, and platform.</p>
 
       <div class="warn-box">
-        🔑 Your API key is sent directly to the AI provider from your browser — never to our servers.
-        <strong>Groq is free</strong> — get a key at
+        🔑 Your API key goes directly from your browser to the AI provider — never through our servers.
+        <strong>Groq is completely free</strong> — get a key at
         <a href="https://console.groq.com" target="_blank" rel="noopener" style="color:var(--accent)">console.groq.com</a>
       </div>
 
+      <div class="section-lbl">API Key</div>
       <div class="api-row">
         <input id="aiApiKey" type="password" class="input-field api-key-input"
-          placeholder="Groq key (gsk_…) or OpenAI key (sk-…)"
+          placeholder="Groq key  gsk_…   or   OpenAI key  sk-…"
           oninput="detectAIProvider(this.value)">
         <span class="provider-badge" id="aiProviderBadge">Auto-detect</span>
       </div>
 
       <div style="margin-bottom:14px">
-        <div class="opt-lbl" style="margin-bottom:6px">Your context (describe the wallet, your interests, or any hints)</div>
-        <textarea id="aiContext" class="textarea" style="min-height:80px"
-          placeholder="e.g. I was into gaming in 2013, used Windows, my favorite game was Minecraft and my dog's name was Max…"></textarea>
+        <div class="section-lbl">Your context &amp; hints</div>
+        <textarea id="aiContext" class="textarea" style="min-height:90px"
+          placeholder="e.g.  I was into gaming in 2013, used Windows, favourite game was Minecraft, dog's name was Max, grew up in London…"></textarea>
       </div>
 
       <div class="btn-row">
-        <button class="btn btn-primary" id="btnAIGenerate" onclick="generateAIWords()">🤖 Generate Words</button>
+        <button class="btn btn-primary" id="btnAIGenerate" onclick="generateAIWords()">🤖 GENERATE WORDS</button>
       </div>
     </div>
 
     <!-- AI Results -->
     <div class="card hidden" id="aiResultsSection">
       <div class="card-title" style="justify-content:space-between">
-        <span>✨ AI Suggestions</span>
-        <span id="aiWordCount" style="font-size:12px;color:var(--text2)">0 words</span>
+        <span>// AI SUGGESTIONS</span>
+        <span id="aiWordCount" style="font-size:11px;color:var(--text2);font-family:var(--mono)">0 words</span>
       </div>
       <div class="ai-word-cloud" id="aiWordCloud"></div>
       <div class="btn-row" style="margin-top:14px">
