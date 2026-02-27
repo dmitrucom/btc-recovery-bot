@@ -1018,7 +1018,10 @@
         <button class="btn btn-secondary" onclick="ksPrev()">← Prev</button>
         <button class="btn btn-secondary" onclick="ksNext()">Next →</button>
         <button class="btn btn-secondary" onclick="ksRandom()">⚄ Random</button>
+        <button class="btn btn-primary" id="ksCheckPageBtn" onclick="ksCheckPage()" style="margin-left:auto">⚡ Check Page</button>
+        <button class="btn btn-danger hidden" id="ksStopBtn" onclick="ksStopCheck()">■ STOP</button>
       </div>
+      <div id="ksCheckStatus" style="font-size:11px;color:var(--text2);font-family:var(--mono);margin-bottom:10px;min-height:16px"></div>
 
       <div style="overflow-x:auto">
         <table class="ks-table">
@@ -1143,6 +1146,8 @@ window.ksGoPage         = ksGoPage;
 window.ksPrev           = ksPrev;
 window.ksNext           = ksNext;
 window.ksRandom         = ksRandom;
+window.ksCheckPage      = ksCheckPage;
+window.ksStopCheck      = ksStopCheck;
 window.loadDictPreset   = loadDictPreset;
 window.inspectKey       = inspectKey;
 window.generateEntropyKey = generateEntropyKey;
@@ -2415,11 +2420,19 @@ function initGraveyard() {
 // ═══════════════════════════════════════════════════
 let ksPage = 1n;
 let ksInitialized = false;
+let isKsChecking = false;
+let stopKsFlag = false;
+let ksCurrentPageKeys = [];
 const KS_PER_PAGE = 20;
 
 function renderKeyspacePage(page) {
   ksPage = page < 1n ? 1n : page;
   byId('ksPageInput').value = ksPage.toString();
+  // Reset check state when page changes
+  ksCurrentPageKeys = [];
+  stopKsFlag = true; // abort any in-flight page check
+  const statusEl = byId('ksCheckStatus');
+  if (statusEl) statusEl.textContent = '';
   const tbody = byId('ksTableBody');
   tbody.innerHTML = '';
 
@@ -2465,6 +2478,7 @@ function renderKeyspacePage(page) {
 
     tr.append(tdNum, tdHex, tdLeg, tdNat, tdBtn);
     tbody.appendChild(tr);
+    ksCurrentPageKeys.push(keyHex);
   }
 }
 
@@ -2485,6 +2499,88 @@ function ksRandom() {
   // Keep within a reasonable range (not near the edge of keyspace)
   const MAX_REASONABLE = 2n ** 128n;
   renderKeyspacePage((n % MAX_REASONABLE) + 1n);
+}
+
+async function ksCheckPage() {
+  if (isKsChecking || !ksCurrentPageKeys.length) return;
+  isKsChecking = true;
+  stopKsFlag   = false;
+
+  const checkBtn  = byId('ksCheckPageBtn');
+  const stopBtn   = byId('ksStopBtn');
+  const statusEl  = byId('ksCheckStatus');
+  const tbody     = byId('ksTableBody');
+
+  checkBtn.classList.add('hidden');
+  stopBtn.classList.remove('hidden');
+
+  let foundCount = 0;
+
+  for (let i = 0; i < ksCurrentPageKeys.length; i++) {
+    if (stopKsFlag) break;
+
+    const hexKey = ksCurrentPageKeys[i];
+    const row    = tbody.rows[i];
+    const btn    = row?.cells[4]?.querySelector('button');
+
+    if (btn) { btn.disabled = true; btn.textContent = '🔍'; }
+    if (row) row.style.background = 'rgba(0,229,255,.04)';
+    if (statusEl) statusEl.textContent = `Checking ${i + 1} / ${ksCurrentPageKeys.length}…`;
+
+    try {
+      const privBytes = hexToBytes(hexKey);
+      const pubC  = secp256k1.getPublicKey(privBytes, true);
+      const addrs = [pubToLegacy(pubC), pubToNative(pubC), pubToP2SH(pubC)];
+      const bals  = await checkBalances(addrs);
+      stats.addrs += addrs.length;
+      updateStats();
+
+      let found = false;
+      for (const [addr, info] of Object.entries(bals)) {
+        if (info.balance > 0) {
+          found = true;
+          foundCount++;
+          showResult('key#' + hexKey.slice(0, 8), addr, info.balance, info.txCount, {
+            privHex: hexKey, wif: toWIF(privBytes, true), wifU: toWIF(privBytes, false),
+            addrs: { legacyC: pubToLegacy(pubC), native: pubToNative(pubC), p2sh: pubToP2SH(pubC) },
+          });
+          showToast('🏆 Found balance!', 5000);
+        }
+      }
+
+      const anyUsed = !found && Object.values(bals).some(b => b.txCount > 0);
+      if (row) row.style.background = found ? 'rgba(0,255,136,.05)' : anyUsed ? 'rgba(255,170,0,.03)' : '';
+      if (btn) {
+        btn.textContent = found ? '🏆' : anyUsed ? '👁' : '✅';
+        btn.style.color = found ? 'var(--success)' : anyUsed ? 'var(--warning)' : 'var(--text3)';
+        btn.disabled = false;
+      }
+    } catch(_) {
+      if (row) row.style.background = '';
+      if (btn) { btn.textContent = '❌'; btn.disabled = false; }
+    }
+
+    await sleep(280);
+  }
+
+  isKsChecking = false;
+  checkBtn.classList.remove('hidden');
+  stopBtn.classList.add('hidden');
+  if (statusEl) {
+    if (stopKsFlag) {
+      statusEl.textContent = `⏹ Stopped`;
+    } else {
+      statusEl.textContent = foundCount > 0
+        ? `✅ Page done — 🏆 ${foundCount} wallet(s) found!`
+        : `✅ Page done — all ${ksCurrentPageKeys.length} keys empty`;
+    }
+  }
+}
+
+function ksStopCheck() {
+  stopKsFlag = true;
+  const btn = byId('ksStopBtn');
+  if (btn) btn.textContent = '⏳ Stopping…';
 }
 
 async function checkKeyHex(hexKey, btn) {
