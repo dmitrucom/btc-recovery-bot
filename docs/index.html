@@ -905,28 +905,6 @@
       <div class="lucky-grid" id="luckyGrid"></div>
     </div>
 
-    <!-- Hall of Shame -->
-    <div class="card">
-      <div class="card-title">// HALL OF SHAME</div>
-      <p class="hint">Famous brain wallet passphrases that were cracked and drained. Individually weak passwords that should be checked first in any recovery attempt.</p>
-      <table class="shame-table">
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Passphrase</th>
-            <th>Cracked</th>
-            <th>Status</th>
-            <th></th>
-          </tr>
-        </thead>
-        <tbody id="shameTableBody"></tbody>
-      </table>
-      <div class="btn-row" style="margin-top:14px">
-        <button class="btn btn-primary" onclick="checkShameAll()">🔍 CHECK ALL</button>
-        <button class="btn btn-secondary" onclick="loadDictPreset('shame')">📋 Send to Batch</button>
-      </div>
-    </div>
-
   </div><!-- /panelMemory -->
 
 
@@ -981,10 +959,49 @@
 
 
   <!-- ══════════════════════════════════════════
-       KEYSPACE BROWSER PANEL
+       KEYS TAB — Inspector, Entropy, Keyspace, Graveyard
   ══════════════════════════════════════════ -->
   <div class="tab-panel hidden" id="panelKeys">
 
+    <!-- Key Inspector -->
+    <div class="card">
+      <div class="card-title">// KEY INSPECTOR</div>
+      <p class="hint">Paste any Bitcoin private key — 64-char hex or WIF format (starts with 5, K or L). Instantly see every address type it produces.</p>
+
+      <div class="section-lbl">Private key</div>
+      <div class="input-row">
+        <input id="kiInput" type="text" class="input-field"
+          placeholder="hex: 1e99423a4ed27608...  or  WIF: 5HueCGU8rMjxECyD..."
+          autocomplete="off" autocorrect="off" spellcheck="false">
+      </div>
+      <div class="btn-row">
+        <button class="btn btn-primary" onclick="inspectKey()">🔍 INSPECT KEY</button>
+      </div>
+
+      <div class="hidden" id="kiResult" style="margin-top:16px">
+        <div class="result-item" style="border-color:var(--border);box-shadow:none" id="kiResultInner"></div>
+      </div>
+    </div>
+
+    <!-- Entropy Key Generator -->
+    <div class="card">
+      <div class="card-title">// ENTROPY KEY GENERATOR</div>
+      <p class="hint">Generate a cryptographically secure random Bitcoin private key using your browser's <code style="color:var(--accent)">crypto.getRandomValues</code>. Full 256-bit entropy — nothing like a brain wallet.</p>
+
+      <div class="warn-box" style="margin-bottom:14px">
+        ⚠️ This generates a key that has never existed anywhere before. There is no recovery mechanism — if you lose the key, the funds are gone forever.
+      </div>
+
+      <div class="btn-row" style="margin-bottom:14px">
+        <button class="btn btn-primary" onclick="generateEntropyKey()">⚄ GENERATE RANDOM KEY</button>
+      </div>
+
+      <div class="hidden" id="entropyResult">
+        <div class="result-item" style="border-color:var(--border);box-shadow:none" id="entropyResultInner"></div>
+      </div>
+    </div>
+
+    <!-- Keyspace Browser -->
     <div class="card">
       <div class="card-title">// KEYSPACE BROWSER</div>
       <p class="hint">Browse Bitcoin private keys sequentially by page number. Each page shows 20 deterministic keys. <strong>For educational purposes only</strong> — the odds of finding a funded key by sequential browsing are astronomically small.</p>
@@ -1018,6 +1035,31 @@
             <tr><td colspan="5" style="text-align:center;color:var(--text3);padding:20px;font-family:var(--mono);font-size:12px">Loading keyspace…</td></tr>
           </tbody>
         </table>
+      </div>
+    </div>
+
+    <!-- The Graveyard -->
+    <div class="card">
+      <div class="card-title">// THE GRAVEYARD — Cracked Brain Wallets</div>
+      <p class="hint">These passphrases were found in wordlist attacks and their wallets drained — some within milliseconds of creation. All addresses are now empty. This table demonstrates <strong>why simple words make terrible passphrases</strong>.</p>
+
+      <div style="overflow-x:auto">
+        <table class="shame-table">
+          <thead>
+            <tr>
+              <th>Passphrase</th>
+              <th>Cracked in</th>
+              <th>~Year</th>
+              <th>Address (1…)</th>
+              <th>Why it failed</th>
+            </tr>
+          </thead>
+          <tbody id="graveyardBody"></tbody>
+        </table>
+      </div>
+
+      <div class="btn-row" style="margin-top:14px">
+        <button class="btn btn-secondary" onclick="loadDictPreset('shame')">📋 Use Variations in Batch</button>
       </div>
     </div>
 
@@ -1101,9 +1143,9 @@ window.ksGoPage         = ksGoPage;
 window.ksPrev           = ksPrev;
 window.ksNext           = ksNext;
 window.ksRandom         = ksRandom;
-window.checkShameEntry  = checkShameEntry;
-window.checkShameAll    = checkShameAll;
 window.loadDictPreset   = loadDictPreset;
+window.inspectKey       = inspectKey;
+window.generateEntropyKey = generateEntropyKey;
 
 // ═══════════════════════════════════════════════════
 //  TAB SWITCHING
@@ -1214,6 +1256,35 @@ function toWIF(privBytes, compressed = true) {
   const d   = new Uint8Array([0x80, ...privBytes, ...(compressed ? [0x01] : [])]);
   const chk = sha256(sha256(d)).slice(0, 4);
   return base58Encode(new Uint8Array([...d, ...chk]));
+}
+
+// Base58 decode (reverse of base58Encode)
+function base58Decode(str) {
+  let n = 0n;
+  for (const c of str) {
+    const idx = B58.indexOf(c);
+    if (idx < 0) throw new Error('Invalid Base58 character: ' + c);
+    n = n * 58n + BigInt(idx);
+  }
+  const bytes = [];
+  while (n > 0n) { bytes.unshift(Number(n & 0xffn)); n >>= 8n; }
+  for (const c of str) { if (c !== '1') break; bytes.unshift(0); }
+  return new Uint8Array(bytes);
+}
+
+// Parse hex (64 chars) or WIF → hex private key string
+function parsePrivKey(input) {
+  const t = input.trim();
+  if (/^[0-9a-fA-F]{64}$/.test(t)) return t.toLowerCase();
+  // WIF decode
+  const decoded = base58Decode(t);
+  if (decoded.length < 5) throw new Error('Too short to be a valid key');
+  const payload  = decoded.slice(0, -4);
+  const checksum = decoded.slice(-4);
+  const check    = sha256(sha256(payload)).slice(0, 4);
+  for (let i = 0; i < 4; i++) if (checksum[i] !== check[i]) throw new Error('Invalid WIF checksum');
+  if (payload[0] !== 0x80) throw new Error('Not a Bitcoin mainnet key (wrong version byte)');
+  return bytesToHex(payload.slice(1, 33));
 }
 
 // ═══════════════════════════════════════════════════
@@ -2187,31 +2258,30 @@ const DICT_PRESETS = {
   pop:    ['matrix','inception','starwars','darkside','harrypotter','hermione','voldemort','hobbit','frodo','baggins','batman','superman','spiderman','ironman','thanos','avengers','gameofthrones','breakingbad','walterwhite','heisenberg','minecraft','fortnite'],
 };
 
-const HALL_OF_SHAME_DATA = [
-  { pass: 'password',                      year: '~2012' },
-  { pass: 'bitcoin',                        year: '2011'  },
-  { pass: 'satoshi',                        year: '2011'  },
-  { pass: 'hello',                          year: '2012'  },
-  { pass: 'abc',                            year: '2011'  },
-  { pass: 'qwerty',                         year: '2012'  },
-  { pass: 'test',                           year: '2012'  },
-  { pass: 'correct horse battery staple',   year: '2013'  },
-  { pass: 'this is a test',                 year: '2013'  },
-  { pass: '1',                              year: '2011'  },
-  { pass: 'brainwallet',                    year: '2012'  },
-  { pass: 'sausage',                        year: '2013'  },
-  { pass: 'i am satoshi nakamoto',          year: '2014'  },
-  { pass: 'to be or not to be',            year: '2014'  },
-  { pass: '0',                              year: '2011'  },
-  { pass: 'hunter2',                        year: '2013'  },
-  { pass: 'nakamoto',                       year: '2012'  },
-  { pass: 'genesis',                        year: '2013'  },
+// ─── Graveyard data — famous cracked brain wallets (educational only) ───
+const GRAVEYARD_DATA = [
+  { pass: 'password',                    crackTime: '<1 ms', year: '2013', note: '#1 most used password ever' },
+  { pass: 'bitcoin',                     crackTime: '<1 ms', year: '2012', note: 'first word attackers try' },
+  { pass: 'satoshi',                     crackTime: '<1 ms', year: '2012', note: "creator's name — obvious" },
+  { pass: '1',                           crackTime: '<1 ms', year: '2011', note: 'single digit — in every list' },
+  { pass: 'abc',                         crackTime: '<1 ms', year: '2011', note: 'trivial 3-char sequence' },
+  { pass: 'hello',                       crackTime: '<1 ms', year: '2012', note: 'in every wordlist ever' },
+  { pass: 'qwerty',                      crackTime: '<1 ms', year: '2013', note: 'keyboard pattern' },
+  { pass: 'brainwallet',                 crackTime: '<1 ms', year: '2013', note: 'literally named the attack' },
+  { pass: 'correct horse battery staple', crackTime: '<1 ms', year: '2013', note: 'famous xkcd — widely known' },
+  { pass: 'this is a test',             crackTime: '<1 ms', year: '2013', note: 'common test phrase' },
+  { pass: 'sausage',                     crackTime: '~2 ms', year: '2014', note: 'dictionary word attack' },
+  { pass: 'i am satoshi nakamoto',       crackTime: '~5 ms', year: '2014', note: 'phrase from known wordlists' },
+  { pass: 'to be or not to be',         crackTime: '~5 ms', year: '2014', note: 'famous literary quote' },
+  { pass: 'nakamoto',                    crackTime: '<1 ms', year: '2012', note: "Satoshi's surname alone" },
+  { pass: 'genesis',                     crackTime: '<1 ms', year: '2013', note: 'Bitcoin genesis block ref.' },
+  { pass: 'hunter2',                     crackTime: '<1 ms', year: '2013', note: 'famous IRC "password"' },
 ];
 
 function loadDictPreset(name) {
   let words = [];
   if (name === 'shame') {
-    words = HALL_OF_SHAME_DATA.map(d => d.pass);
+    words = GRAVEYARD_DATA.map(d => d.pass);
   } else if (DICT_PRESETS[name]) {
     words = DICT_PRESETS[name];
   }
@@ -2222,79 +2292,122 @@ function loadDictPreset(name) {
 }
 
 // ═══════════════════════════════════════════════════
-//  HALL OF SHAME
+//  KEY INSPECTOR & ENTROPY GENERATOR
 // ═══════════════════════════════════════════════════
-function initHallOfShame() {
-  const tbody = byId('shameTableBody');
+function renderKeyInfo(container, hexKey, wifC, wifU, legacy, legacyU, p2sh, native) {
+  const fields = [
+    { lbl: 'Private Key (hex)', val: hexKey  },
+    { lbl: 'WIF (compressed)',  val: wifC    },
+    { lbl: 'WIF (uncompr.)',    val: wifU    },
+    { lbl: 'Legacy P2PKH',     val: legacy  },
+    { lbl: 'Legacy (uncompr.)',val: legacyU },
+    { lbl: 'P2SH-SegWit',      val: p2sh    },
+    { lbl: 'Native SegWit',    val: native  },
+  ];
+  container.innerHTML = '';
+  for (const { lbl, val } of fields) {
+    const row   = document.createElement('div'); row.className = 'result-field';
+    const lblEl = document.createElement('span'); lblEl.className = 'rf-lbl'; lblEl.textContent = lbl;
+    const valEl = document.createElement('span'); valEl.className = 'rf-val'; valEl.textContent = val;
+    const cpyEl = document.createElement('button'); cpyEl.className = 'copy-btn'; cpyEl.textContent = 'Copy';
+    cpyEl.onclick = () => navigator.clipboard.writeText(val).then(() => showToast('✓ Copied'));
+    row.append(lblEl, valEl, cpyEl);
+    container.appendChild(row);
+  }
+  // Balance check button
+  const btnRow = document.createElement('div'); btnRow.className = 'btn-row'; btnRow.style.marginTop = '14px';
+  const chkBtn = document.createElement('button'); chkBtn.className = 'btn btn-secondary'; chkBtn.textContent = '⚡ Check Balance';
+  chkBtn.onclick = async () => {
+    chkBtn.disabled = true; chkBtn.textContent = '⏳ Checking…';
+    try {
+      const bals = await checkBalances([legacy, legacyU, p2sh, native]);
+      stats.addrs += 4; updateStats();
+      let found = false;
+      for (const [addr, info] of Object.entries(bals)) {
+        if (info.balance > 0) {
+          found = true;
+          showResult(hexKey.slice(0,8) + '…', addr, info.balance, info.txCount, {
+            privHex: hexKey, wif: wifC, wifU, addrs: { legacyC: legacy, legacyU, p2sh, native },
+          });
+          showToast('🏆 Found balance!', 5000);
+        }
+      }
+      if (!found) {
+        const anyUsed = Object.values(bals).some(i => i.txCount > 0);
+        showToast(anyUsed ? '👁 Used address (swept)' : '✅ All addresses empty');
+      }
+      chkBtn.textContent = '⚡ Recheck';
+    } catch(e) { showToast('❌ ' + e.message.slice(0,50)); chkBtn.textContent = '⚡ Retry'; }
+    chkBtn.disabled = false;
+  };
+  btnRow.appendChild(chkBtn);
+  container.appendChild(btnRow);
+}
+
+function inspectKey() {
+  const raw = byId('kiInput').value.trim();
+  if (!raw) { showToast('Paste a private key first'); return; }
+  let hexKey;
+  try { hexKey = parsePrivKey(raw); }
+  catch(e) { showToast('❌ ' + e.message.slice(0, 70)); return; }
+
+  const privBytes = hexToBytes(hexKey);
+  const pubC = secp256k1.getPublicKey(privBytes, true);
+  const pubU = secp256k1.getPublicKey(privBytes, false);
+  renderKeyInfo(
+    byId('kiResultInner'), hexKey,
+    toWIF(privBytes, true), toWIF(privBytes, false),
+    pubToLegacy(pubC), pubToLegacy(pubU), pubToP2SH(pubC), pubToNative(pubC)
+  );
+  byId('kiResult').classList.remove('hidden');
+}
+
+function generateEntropyKey() {
+  let privBytes;
+  for (let i = 0; i < 100; i++) {
+    const b = crypto.getRandomValues(new Uint8Array(32));
+    const n = BigInt('0x' + bytesToHex(b));
+    if (n > 0n && n < N_SECP) { privBytes = b; break; }
+  }
+  if (!privBytes) { showToast('Generation failed — try again'); return; }
+
+  const hexKey = bytesToHex(privBytes);
+  const pubC   = secp256k1.getPublicKey(privBytes, true);
+  const pubU   = secp256k1.getPublicKey(privBytes, false);
+  renderKeyInfo(
+    byId('entropyResultInner'), hexKey,
+    toWIF(privBytes, true), toWIF(privBytes, false),
+    pubToLegacy(pubC), pubToLegacy(pubU), pubToP2SH(pubC), pubToNative(pubC)
+  );
+  byId('entropyResult').classList.remove('hidden');
+  showToast('✓ New random key generated');
+}
+
+// ═══════════════════════════════════════════════════
+//  GRAVEYARD (educational — no balance checking)
+// ═══════════════════════════════════════════════════
+function initGraveyard() {
+  const tbody = byId('graveyardBody');
   if (!tbody) return;
-  HALL_OF_SHAME_DATA.forEach((item, idx) => {
-    const tr = document.createElement('tr');
+  GRAVEYARD_DATA.forEach(item => {
+    let addrPreview = '—';
+    try {
+      const k = deriveBrainWallet(item.pass);
+      addrPreview = k.addrs.legacyC.slice(0, 10) + '…';
+    } catch(_) {}
 
-    const tdRank  = document.createElement('td'); tdRank.className  = 'shame-rank'; tdRank.textContent = String(idx + 1);
-    const tdPass  = document.createElement('td'); tdPass.className  = 'shame-pass'; tdPass.textContent = item.pass;
-    const tdYr    = document.createElement('td'); tdYr.className    = 'shame-yr';   tdYr.textContent   = item.year;
+    const tr     = document.createElement('tr');
+    const tdPass = document.createElement('td'); tdPass.className = 'shame-pass'; tdPass.textContent = item.pass;
+    const tdTime = document.createElement('td'); tdTime.className = 'shame-yr';   tdTime.textContent = item.crackTime;
+    const tdYear = document.createElement('td'); tdYear.className = 'shame-yr';   tdYear.textContent = item.year;
+    const tdAddr = document.createElement('td'); tdAddr.className = 'shame-yr';
+    tdAddr.style.fontFamily = 'var(--mono)'; tdAddr.textContent = addrPreview;
+    const tdNote = document.createElement('td');
+    tdNote.style.cssText = 'color:var(--text3);font-size:10.5px'; tdNote.textContent = item.note;
 
-    const tdBadge = document.createElement('td');
-    const badge   = document.createElement('span');
-    badge.className   = 'shame-badge'; badge.id = `shameBadge${idx}`; badge.textContent = '⬜ unchecked';
-    tdBadge.appendChild(badge);
-
-    const tdBtn   = document.createElement('td');
-    const btn     = document.createElement('button');
-    btn.className = 'btn btn-secondary'; btn.id = `shameBtn${idx}`;
-    btn.style.cssText = 'padding:4px 9px;font-size:10px';
-    btn.textContent = 'Check';
-    btn.onclick = () => checkShameEntry(idx);
-    tdBtn.appendChild(btn);
-
-    tr.append(tdRank, tdPass, tdYr, tdBadge, tdBtn);
+    tr.append(tdPass, tdTime, tdYear, tdAddr, tdNote);
     tbody.appendChild(tr);
   });
-}
-
-async function checkShameEntry(idx) {
-  const item  = HALL_OF_SHAME_DATA[idx];
-  const badge = byId(`shameBadge${idx}`);
-  const btn   = byId(`shameBtn${idx}`);
-  if (btn)   { btn.disabled = true; }
-  if (badge) { badge.textContent = '🔍 checking'; badge.style.color = 'var(--accent)'; }
-
-  try {
-    const keyInfo = deriveBrainWallet(item.pass);
-    const addrs   = [keyInfo.addrs.legacyC, keyInfo.addrs.legacyU, keyInfo.addrs.p2sh, keyInfo.addrs.native];
-    const bals    = await checkBalances(addrs);
-    stats.words++;
-    stats.addrs += addrs.length;
-    updateStats();
-
-    let found = false;
-    for (const [addr, info] of Object.entries(bals)) {
-      if (info.balance > 0) {
-        found = true;
-        showResult(item.pass, addr, info.balance, info.txCount, keyInfo);
-        if (badge) { badge.textContent = '🏆 FOUND!'; badge.style.color = 'var(--success)'; }
-        showToast('🏆 Found balance!', 5000);
-      }
-    }
-    if (!found) {
-      const anyUsed = Object.values(bals).some(i => i.txCount > 0);
-      if (badge) {
-        badge.textContent = anyUsed ? '👁 swept' : '✅ empty';
-        badge.style.color = anyUsed ? 'var(--warning)' : 'var(--text3)';
-      }
-    }
-  } catch(e) {
-    if (badge) { badge.textContent = '❌ error'; badge.style.color = 'var(--danger)'; }
-  }
-  if (btn) { btn.disabled = false; }
-}
-
-async function checkShameAll() {
-  for (let i = 0; i < HALL_OF_SHAME_DATA.length; i++) {
-    await checkShameEntry(i);
-    await sleep(350);
-  }
-  showToast('✓ Hall of Shame check complete');
 }
 
 // ═══════════════════════════════════════════════════
@@ -2411,7 +2524,7 @@ async function checkKeyHex(hexKey, btn) {
 // ─── INIT ───
 updateStats();
 initFromUrlParams();
-initHallOfShame();
+initGraveyard();
 </script>
 </body>
 </html>

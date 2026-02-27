@@ -531,8 +531,7 @@ async function handleCallback(chatId, data) {
                 await runLongOp(() => handleFeelingLucky(chatId));
                 break;
             case 'shame':
-                if (value === 'check_all') await runLongOp(() => handleHallOfShameCheckAll(chatId));
-                else await handleHallOfShame(chatId);
+                await handleGraveyard(chatId);
                 break;
             case 'keyhunt': {
                 const huntCount = Math.min(Math.max(parseInt(value) || 5, 1), 100);
@@ -2150,82 +2149,45 @@ async function handleDictionary(chatId) {
     );
 }
 
-// ===== Hall of Shame — famous cracked brain wallets =====
-const HALL_OF_SHAME = [
-    'password', 'bitcoin', 'satoshi', 'hello', 'abc', 'qwerty', 'test',
-    'correct horse battery staple', 'this is a test', '1', 'brainwallet',
-    'sausage', 'i am satoshi nakamoto', 'to be or not to be', '0',
-    'hunter2', 'nakamoto', 'genesis',
+// ===== The Graveyard — educational view of famous cracked brain wallets =====
+const GRAVEYARD = [
+    { pass: 'password',                    crackTime: '<1 ms', year: '2013', note: '#1 most common password' },
+    { pass: 'bitcoin',                     crackTime: '<1 ms', year: '2012', note: 'first word attackers try' },
+    { pass: 'satoshi',                     crackTime: '<1 ms', year: '2012', note: "creator's name — obvious" },
+    { pass: '1',                           crackTime: '<1 ms', year: '2011', note: 'single digit' },
+    { pass: 'hello',                       crackTime: '<1 ms', year: '2012', note: 'in every wordlist' },
+    { pass: 'qwerty',                      crackTime: '<1 ms', year: '2013', note: 'keyboard pattern' },
+    { pass: 'brainwallet',                 crackTime: '<1 ms', year: '2013', note: 'literally named the attack' },
+    { pass: 'correct horse battery staple', crackTime: '<1 ms', year: '2013', note: 'famous xkcd phrase' },
+    { pass: 'this is a test',             crackTime: '<1 ms', year: '2013', note: 'common test phrase' },
+    { pass: 'sausage',                     crackTime: '~2 ms', year: '2014', note: 'dictionary word' },
+    { pass: 'i am satoshi nakamoto',       crackTime: '~5 ms', year: '2014', note: 'phrase from known lists' },
+    { pass: 'to be or not to be',         crackTime: '~5 ms', year: '2014', note: 'famous Shakespeare quote' },
 ];
 
-async function handleHallOfShame(chatId) {
+async function handleGraveyard(chatId) {
+    const rows = GRAVEYARD.slice(0, 10).map((g, i) =>
+        `${i + 1}. <code>${g.pass}</code>\n   ⏱ ${g.crackTime} · ${g.year} · <i>${g.note}</i>`
+    ).join('\n\n');
+
     const text =
-        `💀 <b>Hall of Shame</b>\n\n` +
-        `These are famous passphrases that were cracked and drained — often used as brain wallets in the early days.\n\n` +
-        `<b>Notable entries:</b>\n` +
-        HALL_OF_SHAME.slice(0, 12).map((p, i) => `${i + 1}. <code>${p}</code>`).join('\n') +
-        `\n<i>…and ${HALL_OF_SHAME.length - 12} more</i>\n\n` +
-        `⚡ <b>Tip:</b> Use "Check All" to run all ${HALL_OF_SHAME.length} at once — great starting point!`;
+        `🪦 <b>The Graveyard</b>\n\n` +
+        `These passphrases were found via dictionary attacks and their Bitcoin wallets drained — ` +
+        `some within milliseconds of creation. <b>All are now empty.</b>\n\n` +
+        rows + `\n\n` +
+        `📖 <b>Lesson:</b> Any word in any dictionary is immediately cracked. ` +
+        `A strong passphrase needs to be truly random or very long and obscure.\n\n` +
+        `💡 Use <b>Memory Guide</b> to recall your actual passphrase instead.`;
 
     await telegram.sendMessageWithKeyboard(chatId, text,
         telegram.buildKeyboard([
-            [{ t: '🔍 Check All Shame Entries', d: 'shame:check_all' }],
             [
                 { t: '🧠 Memory Guide', d: 'memory:main' },
                 { t: '📂 Word Lists', d: 'topics_page:0' },
             ],
+            [{ t: '✏️ Check a Word', d: 'start:type_word' }],
             [{ t: '🏠 Menu', d: 'menu:main' }],
-            ...webCheckerRow(`${WEBAPP_URL}?tab=memory`, '🌐 Open in Web App'),
-        ])
-    );
-}
-
-async function handleHallOfShameCheckAll(chatId) {
-    stopCurrentBatch = false;
-    const msg = await telegram.sendMessageWithKeyboard(chatId,
-        `💀 <b>Checking Hall of Shame…</b>\n\n0 / ${HALL_OF_SHAME.length}`,
-        STOP_KEYBOARD
-    );
-    const msgId = msg?.message_id;
-    let found = 0;
-
-    for (let i = 0; i < HALL_OF_SHAME.length; i++) {
-        if (stopCurrentBatch) break;
-        const passphrase = HALL_OF_SHAME[i];
-        try {
-            const derived = bitcoin.deriveBrainWallet(passphrase);
-            const addrs   = Object.values(derived.addresses || {});
-            const apiKeys = {
-                blockchain_key:  settings.get(chatId, 'blockchain_key'),
-                blockcypher_key: settings.get(chatId, 'blockcypher_key'),
-                blockstream_key: settings.get(chatId, 'blockstream_key'),
-            };
-            const hasBalance = await balanceChecker.hasAnyBalance(addrs, settings.get(chatId, 'api'), apiKeys);
-            if (hasBalance) {
-                found++;
-                session.cacheWordResult(passphrase, true, 0, addrs.length);
-                const bMap = new Map(); for (const a of addrs) bMap.set(a, { balance: 1 });
-                await notifyAdmin(passphrase, bMap, 'shame_check');
-            } else {
-                session.cacheWordResult(passphrase, false, 0, addrs.length);
-            }
-        } catch(_) {}
-
-        if ((i + 1) % 3 === 0 && msgId) {
-            await telegram.editMessageText(chatId, msgId,
-                `💀 Checking Hall of Shame…\n${i + 1} / ${HALL_OF_SHAME.length} checked · Found: ${found}`,
-                STOP_KEYBOARD
-            ).catch(() => {});
-        }
-    }
-
-    if (msgId) await telegram.deleteMessage(chatId, msgId).catch(() => {});
-    await telegram.sendMessageWithKeyboard(chatId,
-        `💀 <b>Hall of Shame complete!</b>\n\n` +
-        `✅ Checked: ${HALL_OF_SHAME.length} passphrases\n` +
-        `💰 Found: ${found}`,
-        telegram.buildKeyboard([
-            [{ t: '🏠 Menu', d: 'menu:main' }],
+            ...webCheckerRow(`${WEBAPP_URL}?tab=keys`, '🌐 Open Graveyard in Web App'),
         ])
     );
 }
@@ -3424,7 +3386,7 @@ async function cmdMainMenu(chatId) {
     ]);
     buttons.push([
         { t: '\ud83d\udca0 Feeling Lucky', d: 'lucky:' },
-        { t: '\ud83d\udca7 Hall of Shame', d: 'shame:main' },
+        { t: '\ud83e\udda6 The Graveyard', d: 'shame:main' },
     ]);
 
     // Context-aware: show last word actions only if relevant
